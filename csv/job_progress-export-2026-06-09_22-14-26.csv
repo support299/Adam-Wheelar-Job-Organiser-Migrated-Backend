@@ -1,0 +1,2 @@
+id;plan_id;job_id;staff_id;status;actual_km;notes;created_at;updated_at
+fa2d7111-da0b-4d82-99f8-6dce48895c8a;3a934788-cf20-4237-80cb-e4d0c763be14;ecc2c893-97d6-4ee8-b967-0b4bff1aa0b5;0dad92cf-11c7-4ee9-95d0-2f645115abd3;completed;50;;2026-05-25 19:12:47.636884+00;2026-05-25 19:13:18.160913+00
