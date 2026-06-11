@@ -13,6 +13,7 @@ from .oauth import (
     get_install_config,
     get_token_status,
     refresh_company_token,
+    sync_location_contacts,
 )
 from .serializers import ExchangeCodeSerializer
 
@@ -42,13 +43,21 @@ class GhlCallbackView(APIView):
 
         try:
             exchange_code(code, settings.GHL_REDIRECT_URI)
-            return HttpResponseRedirect(f'{frontend}/connect?ghl=success')
         except Exception as exc:
             logger.error('GHL callback exchange failed: %s', exc)
             from urllib.parse import quote
             return HttpResponseRedirect(
                 f'{frontend}/connect?ghl=error&msg={quote(str(exc), safe="")}'
             )
+
+        # Best-effort contact sync — don't fail the OAuth flow if this errors
+        try:
+            count = sync_location_contacts()
+            logger.info('Post-OAuth contact sync: %d contacts', count)
+        except Exception as exc:
+            logger.warning('Post-OAuth contact sync failed (non-fatal): %s', exc)
+
+        return HttpResponseRedirect(f'{frontend}/connect?ghl=success')
 
 
 class GhlConfigView(APIView):
@@ -83,4 +92,14 @@ class GhlRefreshView(APIView):
             return Response({'success': True})
         except Exception as exc:
             logger.error('GHL refresh failed: %s', exc)
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class GhlSyncContactsView(APIView):
+    def post(self, request):
+        try:
+            count = sync_location_contacts()
+            return Response({'synced': count})
+        except Exception as exc:
+            logger.error('GHL contact sync failed: %s', exc)
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)

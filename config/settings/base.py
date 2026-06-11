@@ -183,3 +183,10 @@ GHL_SCOPES = config(
 
 # ── Google Maps ──────────────────────────────────────────────────────────────
 GOOGLE_MAPS_SERVER_API_KEY = config('GOOGLE_MAPS_SERVER_API_KEY', default='')
+
+# ── GHL Iframe Auto-Login ────────────────────────────────────────────────────
+# A random secret shared between backend and frontend (.env files only).
+# The frontend sends this secret to /api/auth/iframe-token/ to get a JWT
+# without showing a login form when the app is embedded in the GHL iframe.
+IFRAME_SECRET = config('IFRAME_SECRET', default='')
+IFRAME_USER_EMAIL = config('IFRAME_USER_EMAIL', default='')

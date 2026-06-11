@@ -169,6 +169,74 @@ def get_valid_location_token() -> tuple[str, str]:
     return obj.access_token, obj.location_id
 
 
+def sync_location_contacts() -> int:
+    """Fetch every contact for the connected location from GHL and upsert into GhlContact.
+
+    Returns the number of contacts upserted.
+    Uses cursor-based pagination (startAfterId) to handle large contact lists.
+    """
+    from apps.contacts.models import GhlContact  # local import avoids circular deps
+
+    access_token, location_id = get_valid_location_token()
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Version': '2021-07-28',
+        'Accept': 'application/json',
+    }
+
+    synced = 0
+    start_after_id = None
+
+    while True:
+        params: dict = {'locationId': location_id, 'limit': 100}
+        if start_after_id:
+            params['startAfterId'] = start_after_id
+
+        resp = requests.get(
+            settings.GHL_CONTACTS_URL,
+            headers=headers,
+            params=params,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        contacts = data.get('contacts', [])
+        if not contacts:
+            break
+
+        for c in contacts:
+            contact_id = c.get('id')
+            if not contact_id:
+                continue
+            first = c.get('firstName') or ''
+            last = c.get('lastName') or ''
+            name = c.get('name') or (f'{first} {last}'.strip()) or None
+            GhlContact.objects.update_or_create(
+                id=contact_id,
+                defaults={
+                    'name': name,
+                    'email': c.get('email') or None,
+                    'phone': c.get('phone') or None,
+                    'type': c.get('type') or None,
+                    'location_id': c.get('locationId') or location_id,
+                    'user_id': c.get('assignedTo') or None,
+                    'raw': c,
+                },
+            )
+            synced += 1
+
+        meta = data.get('meta', {})
+        next_cursor = meta.get('startAfterId')
+        # Stop if no next cursor or we got a partial page
+        if not next_cursor or len(contacts) < 100:
+            break
+        start_after_id = next_cursor
+
+    logger.info('GHL contact sync complete: %d contacts upserted for location %s', synced, location_id)
+    return synced
+
+
 def get_install_config() -> dict:
     return {
         'clientId': settings.GHL_CLIENT_ID,
