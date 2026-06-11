@@ -32,7 +32,7 @@ def _post_token(params: dict) -> dict:
 def _mint_location_token(company_access_token: str, company_id: str, location_id: str) -> dict:
     resp = requests.post(
         settings.GHL_LOCATION_TOKEN_URL,
-        data={'companyId': company_id, 'locationId': location_id},
+        json={'companyId': company_id, 'locationId': location_id},
         headers={
             'Accept': 'application/json',
             'Version': '2021-07-28',
