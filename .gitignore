@@ -10,3 +10,6 @@ venv/
 staticfiles/
 media/
 .DS_Store
+
+# Local data import file — not tracked
+/Customer List Final - jobs importing format.csv

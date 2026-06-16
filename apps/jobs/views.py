@@ -6,6 +6,7 @@ from rest_framework.response import Response
 
 from apps.products.models import Product
 from apps.staff.models import Staff
+from config.pagination import OptionalPageNumberPagination
 
 from .filters import JobCompletionFilter, JobFilter
 from .models import Job, JobCompletion, JobProduct, JobStaff
@@ -20,10 +21,13 @@ from .serializers import (
 class JobViewSet(viewsets.ModelViewSet):
     queryset = Job.objects.all()
     serializer_class = JobSerializer
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = JobFilter
+    search_fields = ['name', 'email', 'address', 'phone']
     ordering_fields = ['service_date', 'service_time', 'created_at', 'status']
     ordering = ['service_date', 'service_time']
+    # Returns a plain array unless ?page= is supplied (see OptionalPageNumberPagination).
+    pagination_class = OptionalPageNumberPagination
 
     # ── Staff assignment endpoints ─────────────────────────────────────────
 

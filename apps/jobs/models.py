@@ -43,6 +43,9 @@ class Job(models.Model):
         null=True,
     )
     ghl_contact_id = models.TextField(blank=True, null=True)
+    # Stable external key from the customer-list CSV ("ContactID" column).
+    # Used to upsert rows so re-running the import never duplicates jobs.
+    import_contact_id = models.TextField(blank=True, null=True, unique=True)
     service_type = models.TextField(default='installation')
     sale_date = models.DateField(blank=True, null=True)
     call_status = models.TextField(default='not_called')
@@ -55,6 +58,7 @@ class Job(models.Model):
         indexes = [
             models.Index(fields=['service_date']),
             models.Index(fields=['ghl_contact_id']),
+            models.Index(fields=['import_contact_id']),
             models.Index(fields=['status']),
         ]
 
