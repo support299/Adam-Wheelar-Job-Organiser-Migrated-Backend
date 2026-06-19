@@ -16,6 +16,10 @@ class JobProductWriteSerializer(serializers.Serializer):
     unit_price = serializers.DecimalField(max_digits=10, decimal_places=2, default=0)
 
 
+class JobProductLinesSerializer(serializers.Serializer):
+    lines = JobProductWriteSerializer(many=True)
+
+
 class JobSerializer(serializers.ModelSerializer):
     class Meta:
         model = Job
