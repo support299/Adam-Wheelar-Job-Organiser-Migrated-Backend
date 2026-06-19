@@ -23,7 +23,7 @@ class JobStatus(models.TextChoices):
 class Job(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.TextField()
-    email = models.TextField()
+    email = models.TextField(blank=True)
     phone = models.TextField(blank=True, null=True)
     service_value = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     address = models.TextField()
@@ -116,7 +116,7 @@ class JobCompletion(models.Model):
     service_time = models.TimeField(blank=True, null=True)
     service_value = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     name = models.TextField()
-    email = models.TextField()
+    email = models.TextField(blank=True)
     phone = models.TextField(blank=True, null=True)
     address = models.TextField()
     lat = models.FloatField(blank=True, null=True)
