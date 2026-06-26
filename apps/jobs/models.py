@@ -50,6 +50,7 @@ class Job(models.Model):
     sale_date = models.DateField(blank=True, null=True)
     call_status = models.TextField(default='not_called')
     calls_made = models.IntegerField(default=0)
+    color = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

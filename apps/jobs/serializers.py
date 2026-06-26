@@ -21,15 +21,21 @@ class JobProductLinesSerializer(serializers.Serializer):
 
 
 class JobSerializer(serializers.ModelSerializer):
+    staff_ids = serializers.SerializerMethodField()
+
+    def get_staff_ids(self, obj):
+        return [str(js.staff_id) for js in obj.job_staff.all()]
+
     class Meta:
         model = Job
         fields = [
             'id', 'name', 'email', 'phone', 'service_value', 'address',
             'lat', 'lng', 'service_date', 'service_time', 'status', 'notes',
             'is_recurring', 'frequency', 'ghl_contact_id', 'service_type',
-            'sale_date', 'call_status', 'calls_made', 'created_at', 'updated_at',
+            'sale_date', 'call_status', 'calls_made', 'color', 'created_at', 'updated_at',
+            'staff_ids',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'staff_ids']
 
 
 class JobStaffIdsSerializer(serializers.Serializer):

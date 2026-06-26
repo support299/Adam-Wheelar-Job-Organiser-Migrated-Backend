@@ -15,10 +15,10 @@ LOGGING = {
         'console': {'class': 'logging.StreamHandler'},
     },
     'loggers': {
-        'django.db.backends': {
-            'handlers': ['console'],
-            'level': 'DEBUG' if DEBUG else 'WARNING',
-        },
+        # 'django.db.backends': {
+        #     'handlers': ['console'],
+        #     'level': 'DEBUG' if DEBUG else 'WARNING',
+        # },
         'apps': {
             'handlers': ['console'],
             'level': 'DEBUG',
