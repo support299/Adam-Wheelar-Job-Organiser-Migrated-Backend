@@ -22,9 +22,16 @@ class JobProductLinesSerializer(serializers.Serializer):
 
 class JobSerializer(serializers.ModelSerializer):
     staff_ids = serializers.SerializerMethodField()
+    series_count = serializers.SerializerMethodField()
+    occurrences = serializers.IntegerField(write_only=True, required=False, default=1, min_value=1)
 
     def get_staff_ids(self, obj):
         return [str(js.staff_id) for js in obj.job_staff.all()]
+
+    def get_series_count(self, obj):
+        if obj.parent_job_id is None and obj.occurrence_index == 1:
+            return obj.child_jobs.count() + 1
+        return None
 
     class Meta:
         model = Job
@@ -32,10 +39,11 @@ class JobSerializer(serializers.ModelSerializer):
             'id', 'name', 'email', 'phone', 'service_value', 'address',
             'lat', 'lng', 'service_date', 'service_time', 'status', 'notes',
             'is_recurring', 'frequency', 'ghl_contact_id', 'service_type',
-            'sale_date', 'call_status', 'calls_made', 'color', 'duration', 'created_at', 'updated_at',
-            'staff_ids',
+            'sale_date', 'call_status', 'calls_made', 'color', 'duration',
+            'parent_job_id', 'occurrence_index', 'series_count', 'occurrences',
+            'created_at', 'updated_at', 'staff_ids',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'staff_ids']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'staff_ids', 'series_count']
 
 
 class JobStaffIdsSerializer(serializers.Serializer):

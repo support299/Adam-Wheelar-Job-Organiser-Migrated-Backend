@@ -52,6 +52,11 @@ class Job(models.Model):
     calls_made = models.IntegerField(default=0)
     color = models.TextField(blank=True, null=True)
     duration = models.IntegerField(default=60)
+    parent_job = models.ForeignKey(
+        'self', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='child_jobs',
+    )
+    occurrence_index = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -1,8 +1,27 @@
+import calendar
+from datetime import date, timedelta
+
 from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+
+
+def _add_frequency(d: date, frequency: str) -> date:
+    if frequency == 'weekly':
+        return d + timedelta(weeks=1)
+    if frequency == 'biweekly':
+        return d + timedelta(weeks=2)
+    months_map = {'monthly': 1, 'quarterly': 3, 'semiannually': 6, 'annually': 12}
+    if frequency in months_map:
+        months = months_map[frequency]
+        m = d.month - 1 + months
+        year = d.year + m // 12
+        month = m % 12 + 1
+        day = min(d.day, calendar.monthrange(year, month)[1])
+        return date(year, month, day)
+    return d
 
 from apps.products.models import Product
 from apps.staff.models import Staff
@@ -20,7 +39,7 @@ from .serializers import (
 
 
 class JobViewSet(viewsets.ModelViewSet):
-    queryset = Job.objects.prefetch_related('job_staff').all()
+    queryset = Job.objects.prefetch_related('job_staff', 'child_jobs').all()
     serializer_class = JobSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = JobFilter
@@ -29,6 +48,87 @@ class JobViewSet(viewsets.ModelViewSet):
     ordering = ['service_date', 'service_time']
     # Returns a plain array unless ?page= is supplied (see OptionalPageNumberPagination).
     pagination_class = OptionalPageNumberPagination
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        occurrences = serializer.validated_data.pop('occurrences', 1) or 1
+        serializer.validated_data.pop('occurrence_index', None)
+        validated = serializer.validated_data
+
+        if occurrences > 1 and validated.get('is_recurring') and validated.get('frequency'):
+            child_jobs = []
+            with transaction.atomic():
+                current_date = validated['service_date']
+                parent = Job.objects.create(**validated, occurrence_index=1)
+                for i in range(1, occurrences):
+                    current_date = _add_frequency(current_date, validated['frequency'])
+                    child = Job.objects.create(
+                        **{
+                            **validated,
+                            'service_date': current_date,
+                            'status': 'pending',
+                            'parent_job': parent,
+                            'occurrence_index': i + 1,
+                        }
+                    )
+                    child_jobs.append(child)
+            response_data = self.get_serializer(parent).data
+            response_data['child_job_ids'] = [str(c.id) for c in child_jobs]
+            return Response(response_data, status=status.HTTP_201_CREATED)
+
+        serializer.save()
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        occurrences = serializer.validated_data.pop('occurrences', None)
+        serializer.save()
+
+        # Add more occurrences if parent job and count increased
+        if (occurrences is not None
+                and instance.parent_job_id is None
+                and instance.occurrence_index == 1
+                and instance.is_recurring
+                and instance.frequency):
+            current_count = instance.child_jobs.count() + 1
+            extra = occurrences - current_count
+            if extra > 0:
+                last_child = instance.child_jobs.order_by('-occurrence_index').first()
+                current_date = last_child.service_date if last_child else instance.service_date
+                last_index = (last_child.occurrence_index or 1) if last_child else 1
+                with transaction.atomic():
+                    for i in range(extra):
+                        current_date = _add_frequency(current_date, instance.frequency)
+                        Job.objects.create(
+                            name=instance.name,
+                            email=instance.email,
+                            phone=instance.phone,
+                            ghl_contact_id=instance.ghl_contact_id,
+                            service_value=instance.service_value,
+                            address=instance.address,
+                            lat=instance.lat,
+                            lng=instance.lng,
+                            service_date=current_date,
+                            service_time=instance.service_time,
+                            status='pending',
+                            notes=instance.notes,
+                            is_recurring=instance.is_recurring,
+                            frequency=instance.frequency,
+                            service_type='servicing',
+                            call_status='not_called',
+                            calls_made=0,
+                            color=instance.color,
+                            duration=instance.duration,
+                            parent_job=instance,
+                            occurrence_index=last_index + i + 1,
+                        )
+
+        return Response(self.get_serializer(instance).data)
 
     # ── Staff assignment endpoints ─────────────────────────────────────────
 
