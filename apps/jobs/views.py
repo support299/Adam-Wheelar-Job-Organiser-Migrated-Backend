@@ -56,6 +56,45 @@ class JobViewSet(viewsets.ModelViewSet):
         serializer.validated_data.pop('occurrence_index', None)
         validated = serializer.validated_data
 
+        # Validate product_lines sent inline with the create request
+        raw_lines = request.data.get('product_lines', [])
+        if raw_lines:
+            line_ser = JobProductWriteSerializer(data=raw_lines, many=True)
+            line_ser.is_valid(raise_exception=True)
+            product_lines = line_ser.validated_data
+            product_ids = [l['product_id'] for l in product_lines]
+            found = set(Product.objects.filter(id__in=product_ids).values_list('id', flat=True))
+            missing = [str(p) for p in product_ids if p not in found]
+            if missing:
+                return Response({'detail': f'Products not found: {missing}'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            product_lines = []
+
+        # Validate staff_ids sent inline with the create request
+        raw_staff = request.data.get('staff_ids', [])
+        if raw_staff:
+            staff_ser = JobStaffIdsSerializer(data={'staff_ids': raw_staff})
+            staff_ser.is_valid(raise_exception=True)
+            staff_ids = staff_ser.validated_data['staff_ids']
+            found = set(Staff.objects.filter(id__in=staff_ids).values_list('id', flat=True))
+            missing = [str(s) for s in staff_ids if s not in found]
+            if missing:
+                return Response({'detail': f'Staff not found: {missing}'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            staff_ids = []
+
+        def _bulk_assign(jobs):
+            if product_lines:
+                JobProduct.objects.bulk_create([
+                    JobProduct(job=j, product_id=l['product_id'], quantity=l['quantity'], unit_price=l['unit_price'])
+                    for j in jobs for l in product_lines
+                ])
+            if staff_ids:
+                JobStaff.objects.bulk_create([
+                    JobStaff(job=j, staff_id=sid)
+                    for j in jobs for sid in staff_ids
+                ])
+
         if occurrences > 1 and validated.get('is_recurring') and validated.get('frequency'):
             child_jobs = []
             with transaction.atomic():
@@ -73,11 +112,14 @@ class JobViewSet(viewsets.ModelViewSet):
                         }
                     )
                     child_jobs.append(child)
+                _bulk_assign([parent] + child_jobs)
             response_data = self.get_serializer(parent).data
             response_data['child_job_ids'] = [str(c.id) for c in child_jobs]
             return Response(response_data, status=status.HTTP_201_CREATED)
 
-        serializer.save()
+        with transaction.atomic():
+            serializer.save()
+            _bulk_assign([serializer.instance])
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
@@ -167,6 +209,9 @@ class JobViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='products')
     def list_all_products(self, request):
         lines = JobProduct.objects.select_related('product', 'job').all()
+        ghl_contact_id = request.query_params.get('ghl_contact_id')
+        if ghl_contact_id:
+            lines = lines.filter(job__ghl_contact_id=ghl_contact_id)
         return Response([
             {
                 'id': str(jp.id),
