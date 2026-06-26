@@ -109,6 +109,8 @@ class JobViewSet(viewsets.ModelViewSet):
                             'status': 'pending',
                             'parent_job': parent,
                             'occurrence_index': i + 1,
+                            'service_type': 'servicing',
+                            'sale_date': None,
                         }
                     )
                     child_jobs.append(child)
@@ -212,17 +214,24 @@ class JobViewSet(viewsets.ModelViewSet):
         ghl_contact_id = request.query_params.get('ghl_contact_id')
         if ghl_contact_id:
             lines = lines.filter(job__ghl_contact_id=ghl_contact_id)
-        return Response([
-            {
+        service_type = request.query_params.get('service_type')
+        if service_type:
+            lines = lines.filter(job__service_type=service_type)
+        seen = set()
+        result = []
+        for jp in lines:
+            if jp.product_id in seen:
+                continue
+            seen.add(jp.product_id)
+            result.append({
                 'id': str(jp.id),
                 'job_id': str(jp.job_id),
                 'product_id': str(jp.product_id),
                 'quantity': str(jp.quantity),
                 'unit_price': str(jp.unit_price),
                 'created_at': jp.created_at.isoformat(),
-            }
-            for jp in lines
-        ])
+            })
+        return Response(result)
 
     @action(detail=True, methods=['get', 'put'], url_path='products')
     def products(self, request, pk=None):
