@@ -32,7 +32,7 @@ class JobSerializer(serializers.ModelSerializer):
             'id', 'name', 'email', 'phone', 'service_value', 'address',
             'lat', 'lng', 'service_date', 'service_time', 'status', 'notes',
             'is_recurring', 'frequency', 'ghl_contact_id', 'service_type',
-            'sale_date', 'call_status', 'calls_made', 'color', 'created_at', 'updated_at',
+            'sale_date', 'call_status', 'calls_made', 'color', 'duration', 'created_at', 'updated_at',
             'staff_ids',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'staff_ids']
