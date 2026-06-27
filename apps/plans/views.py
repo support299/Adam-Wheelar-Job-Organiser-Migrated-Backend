@@ -12,12 +12,21 @@ from .serializers import (
 
 
 class SavedPlanViewSet(viewsets.ModelViewSet):
-    queryset = SavedPlan.objects.all()
     serializer_class = SavedPlanSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['plan_date']
     ordering_fields = ['plan_date', 'created_at']
     ordering = ['-plan_date', '-created_at']
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff:
+            return SavedPlan.objects.all()
+        try:
+            staff_id = str(user.staff_profile.id)
+        except Exception:
+            return SavedPlan.objects.none()
+        return SavedPlan.objects.filter(staff_ids__contains=[staff_id])
 
 
 class JobProgressViewSet(viewsets.ReadOnlyModelViewSet):
