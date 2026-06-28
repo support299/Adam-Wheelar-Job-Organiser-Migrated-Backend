@@ -1,15 +1,39 @@
 from rest_framework import serializers
 
+from apps.jobs.serializers import JobSerializer
 from .models import JobProgress, SavedPlan
 
 
 class SavedPlanSerializer(serializers.ModelSerializer):
+    jobs = serializers.SerializerMethodField()
+    progress = serializers.SerializerMethodField()
+
+    def get_jobs(self, obj):
+        job_map = self.context.get('job_map', {})
+        current_staff_id = self.context.get('current_staff_id')  # None = admin, sees all
+        result = []
+        for jid in (obj.ordered_job_ids or []):
+            job = job_map.get(str(jid))
+            if not job:
+                continue
+            if current_staff_id:
+                assigned = [str(js.staff_id) for js in job.job_staff.all()]
+                if current_staff_id not in assigned:
+                    continue
+            result.append(JobSerializer(job, context=self.context).data)
+        return result
+
+    def get_progress(self, obj):
+        return JobProgressSerializer(obj.progress.all(), many=True).data
+
     class Meta:
         model = SavedPlan
         fields = [
             'id', 'name', 'plan_date', 'base_id', 'base_name',
             'route_shape', 'optimize_metric', 'ordered_job_ids', 'staff_ids',
-            'road_km', 'road_minutes', 'legs', 'notes', 'created_at', 'updated_at',
+            'road_km', 'road_minutes', 'legs', 'notes',
+            'jobs', 'progress',
+            'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 

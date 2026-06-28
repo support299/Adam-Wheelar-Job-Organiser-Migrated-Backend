@@ -25,13 +25,17 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             raise serializers.ValidationError({'detail': 'User account is disabled.'})
 
         is_admin = user.is_staff
+        staff_profile = getattr(user, 'staff_profile', None)
+        staff_id = str(staff_profile.id) if staff_profile else None
 
         refresh = RefreshToken.for_user(user)
         refresh['is_admin'] = is_admin
+        refresh['staff_id'] = staff_id
         return {
             'refresh': str(refresh),
             'access': str(refresh.access_token),
             'is_admin': is_admin,
+            'staff_id': staff_id,
             'user': {
                 'id': user.id,
                 'email': user.email,
