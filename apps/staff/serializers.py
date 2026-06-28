@@ -11,7 +11,7 @@ class StaffSerializer(serializers.ModelSerializer):
     class Meta:
         model = Staff
         fields = [
-            'id', 'name', 'email', 'phone', 'role', 'active',
+            'id', 'name', 'email', 'phone', 'role', 'active', 'color',
             'has_login', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'has_login', 'created_at', 'updated_at']

@@ -39,7 +39,7 @@ class JobSerializer(serializers.ModelSerializer):
             'id', 'name', 'email', 'phone', 'service_value', 'address',
             'lat', 'lng', 'service_date', 'service_time', 'status', 'notes',
             'is_recurring', 'frequency', 'ghl_contact_id', 'service_type',
-            'sale_date', 'call_status', 'calls_made', 'color', 'duration',
+            'sale_date', 'call_status', 'calls_made', 'duration',
             'parent_job_id', 'occurrence_index', 'series_count', 'occurrences',
             'created_at', 'updated_at', 'staff_ids',
         ]
