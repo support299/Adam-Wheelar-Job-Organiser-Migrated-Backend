@@ -2,6 +2,7 @@ import calendar
 from datetime import date, timedelta
 
 from django.db import transaction
+from django.db.models import Q
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
@@ -208,6 +209,140 @@ class JobViewSet(viewsets.ModelViewSet):
 
     # ── Product (line item) endpoints ──────────────────────────────────────
 
+    @action(detail=False, methods=['get'], url_path='purchase-history')
+    def purchase_history(self, request):
+        """Return installation product rows with next-service info for a contact.
+
+        Query params: email OR ghl_contact_id (at least one required).
+        """
+        email = request.query_params.get('email', '').strip().lower()
+        ghl_contact_id = request.query_params.get('ghl_contact_id', '').strip()
+
+        if not email and not ghl_contact_id:
+            return Response(
+                {'detail': 'Provide email or ghl_contact_id.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # All jobs belonging to this contact
+        job_q = Q()
+        if email:
+            job_q |= Q(email__iexact=email)
+        if ghl_contact_id:
+            job_q |= Q(ghl_contact_id=ghl_contact_id)
+        contact_jobs = Job.objects.filter(job_q)
+
+        # Earliest pending/scheduled servicing job per address
+        service_jobs = (
+            contact_jobs
+            .filter(service_type='servicing')
+            .exclude(status__in=['completed', 'skip', 'not_interested'])
+            .order_by('service_date')
+        )
+        next_service_by_address: dict = {}
+        for j in service_jobs:
+            key = j.address.strip().lower()
+            if key not in next_service_by_address:
+                next_service_by_address[key] = j
+
+        def next_svc_info(address: str) -> dict:
+            svc = next_service_by_address.get(address.strip().lower())
+            return {
+                'next_service_date': svc.service_date.isoformat() if svc else None,
+                'next_service_status': svc.status if svc else None,
+                'is_recurring': svc.is_recurring if svc else False,
+                'frequency': svc.frequency if svc else None,
+                'service_complete': svc is None,
+            }
+
+        rows = []
+
+        # --- Installation completions ---
+        # Derive emails to match completions (they don't store ghl_contact_id)
+        completion_emails: set = set()
+        if email:
+            completion_emails.add(email)
+        if ghl_contact_id:
+            for e in (
+                contact_jobs.exclude(email='')
+                .values_list('email', flat=True)
+                .distinct()
+            ):
+                completion_emails.add(e.lower())
+
+        if completion_emails:
+            email_q = Q()
+            for e in completion_emails:
+                email_q |= Q(email__iexact=e)
+            install_completions = JobCompletion.objects.filter(
+                email_q, service_type='installation'
+            )
+        else:
+            install_completions = JobCompletion.objects.none()
+
+        # --- Installation job products ---
+        install_jobs = contact_jobs.filter(service_type='installation')
+        install_job_products = (
+            JobProduct.objects.filter(job__in=install_jobs)
+            .select_related('product', 'job')
+        )
+
+        # Batch product name lookup
+        all_product_ids: set = set()
+        for c in install_completions:
+            for line in (c.product_lines or []):
+                pid = line.get('product_id')
+                if pid:
+                    all_product_ids.add(str(pid))
+        for jp in install_job_products:
+            all_product_ids.add(str(jp.product_id))
+
+        product_name_map = {
+            str(p.id): p.name
+            for p in Product.objects.filter(id__in=all_product_ids)
+        } if all_product_ids else {}
+
+        for c in install_completions:
+            svc = next_svc_info(c.address)
+            for i, line in enumerate(c.product_lines or []):
+                pid = str(line.get('product_id', ''))
+                qty = float(line.get('quantity', 0))
+                price = float(line.get('unit_price', 0))
+                rows.append({
+                    'id': f'c-{c.id}-{i}',
+                    'install_date': c.completed_at.isoformat(),
+                    'install_status': 'completed',
+                    'source': 'completion',
+                    'address': c.address,
+                    'product_id': pid,
+                    'product_name': product_name_map.get(pid, 'Product'),
+                    'quantity': str(qty),
+                    'unit_price': str(price),
+                    'total': str(round(qty * price, 2)),
+                    **svc,
+                })
+
+        for jp in install_job_products:
+            svc = next_svc_info(jp.job.address)
+            qty = float(jp.quantity)
+            price = float(jp.unit_price)
+            rows.append({
+                'id': f'j-{jp.id}',
+                'install_date': jp.job.service_date.isoformat(),
+                'install_status': jp.job.status,
+                'source': 'job',
+                'address': jp.job.address,
+                'product_id': str(jp.product_id),
+                'product_name': product_name_map.get(str(jp.product_id), 'Product'),
+                'quantity': str(qty),
+                'unit_price': str(price),
+                'total': str(round(qty * price, 2)),
+                **svc,
+            })
+
+        rows.sort(key=lambda r: r['install_date'], reverse=True)
+        return Response(rows)
+
     @action(detail=False, methods=['get'], url_path='products')
     def list_all_products(self, request):
         lines = JobProduct.objects.select_related('product', 'job').all()
@@ -217,20 +352,17 @@ class JobViewSet(viewsets.ModelViewSet):
         service_type = request.query_params.get('service_type')
         if service_type:
             lines = lines.filter(job__service_type=service_type)
-        seen = set()
-        result = []
-        for jp in lines:
-            if jp.product_id in seen:
-                continue
-            seen.add(jp.product_id)
-            result.append({
+        result = [
+            {
                 'id': str(jp.id),
                 'job_id': str(jp.job_id),
                 'product_id': str(jp.product_id),
                 'quantity': str(jp.quantity),
                 'unit_price': str(jp.unit_price),
                 'created_at': jp.created_at.isoformat(),
-            })
+            }
+            for jp in lines
+        ]
         return Response(result)
 
     @action(detail=True, methods=['get', 'put'], url_path='products')

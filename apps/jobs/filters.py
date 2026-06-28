@@ -13,6 +13,7 @@ class JobFilter(django_filters.FilterSet):
     status = django_filters.CharFilter(field_name='status')
     service_type = django_filters.CharFilter(field_name='service_type')
     ghl_contact_id = django_filters.CharFilter(field_name='ghl_contact_id')
+    email = django_filters.CharFilter(field_name='email', lookup_expr='iexact')
     # Staff filter: jobs assigned to a specific staff member
     staff_id = django_filters.UUIDFilter(
         field_name='job_staff__staff__id', label='Staff ID'
