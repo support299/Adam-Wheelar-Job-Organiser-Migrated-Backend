@@ -39,6 +39,55 @@ from .serializers import (
 )
 
 
+def _spawn_next_occurrence(completed_job: Job):
+    """Create the next child job in a recurring series after one is completed."""
+    root = completed_job if completed_job.parent_job_id is None else completed_job.parent_job
+    total = root.total_occurrences
+    if not total:
+        return
+    current_count = root.child_jobs.count() + 1
+    if current_count >= total:
+        return
+    next_date = _add_frequency(completed_job.service_date, completed_job.frequency)
+    next_index = (completed_job.occurrence_index or 1) + 1
+    with transaction.atomic():
+        next_job = Job.objects.create(
+            name=root.name,
+            email=root.email,
+            phone=root.phone,
+            ghl_contact_id=root.ghl_contact_id,
+            service_value=root.service_value,
+            address=root.address,
+            lat=root.lat,
+            lng=root.lng,
+            service_date=next_date,
+            service_time=root.service_time,
+            status='pending',
+            notes=None,
+            is_recurring=True,
+            frequency=root.frequency,
+            service_type='servicing',
+            call_status='not_called',
+            calls_made=0,
+            duration=root.duration,
+            parent_job=root,
+            occurrence_index=next_index,
+            total_occurrences=total,
+        )
+        root_products = list(JobProduct.objects.filter(job=root))
+        if root_products:
+            JobProduct.objects.bulk_create([
+                JobProduct(job=next_job, product_id=jp.product_id, quantity=jp.quantity, unit_price=jp.unit_price)
+                for jp in root_products
+            ])
+        root_staff = list(JobStaff.objects.filter(job=root))
+        if root_staff:
+            JobStaff.objects.bulk_create([
+                JobStaff(job=next_job, staff_id=js.staff_id)
+                for js in root_staff
+            ])
+
+
 class JobViewSet(viewsets.ModelViewSet):
     queryset = Job.objects.prefetch_related('job_staff', 'child_jobs').all()
     serializer_class = JobSerializer
@@ -96,82 +145,44 @@ class JobViewSet(viewsets.ModelViewSet):
                     for j in jobs for sid in staff_ids
                 ])
 
-        if occurrences > 1 and validated.get('is_recurring') and validated.get('frequency'):
-            child_jobs = []
-            with transaction.atomic():
-                current_date = validated['service_date']
-                parent = Job.objects.create(**validated, occurrence_index=1)
-                for i in range(1, occurrences):
-                    current_date = _add_frequency(current_date, validated['frequency'])
-                    child = Job.objects.create(
-                        **{
-                            **validated,
-                            'service_date': current_date,
-                            'status': 'pending',
-                            'parent_job': parent,
-                            'occurrence_index': i + 1,
-                            'service_type': 'servicing',
-                            'sale_date': None,
-                        }
-                    )
-                    child_jobs.append(child)
-                _bulk_assign([parent] + child_jobs)
-            response_data = self.get_serializer(parent).data
-            response_data['child_job_ids'] = [str(c.id) for c in child_jobs]
-            return Response(response_data, status=status.HTTP_201_CREATED)
+        validated['occurrence_index'] = 1
+        if validated.get('is_recurring') and validated.get('frequency') and occurrences > 1:
+            validated['total_occurrences'] = occurrences
 
         with transaction.atomic():
             serializer.save()
             _bulk_assign([serializer.instance])
+
+        job = serializer.instance
+        if job.status in ('completed', 'skip') and job.is_recurring and job.total_occurrences:
+            _spawn_next_occurrence(job)
+
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
+        old_status = instance.status
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         occurrences = serializer.validated_data.pop('occurrences', None)
         serializer.save()
 
-        # Add more occurrences if parent job and count increased
+        # Update total_occurrences if manually changed on the parent job
         if (occurrences is not None
+                and occurrences > 1
                 and instance.parent_job_id is None
                 and instance.occurrence_index == 1
                 and instance.is_recurring
-                and instance.frequency):
-            current_count = instance.child_jobs.count() + 1
-            extra = occurrences - current_count
-            if extra > 0:
-                last_child = instance.child_jobs.order_by('-occurrence_index').first()
-                current_date = last_child.service_date if last_child else instance.service_date
-                last_index = (last_child.occurrence_index or 1) if last_child else 1
-                with transaction.atomic():
-                    for i in range(extra):
-                        current_date = _add_frequency(current_date, instance.frequency)
-                        Job.objects.create(
-                            name=instance.name,
-                            email=instance.email,
-                            phone=instance.phone,
-                            ghl_contact_id=instance.ghl_contact_id,
-                            service_value=instance.service_value,
-                            address=instance.address,
-                            lat=instance.lat,
-                            lng=instance.lng,
-                            service_date=current_date,
-                            service_time=instance.service_time,
-                            status='pending',
-                            notes=instance.notes,
-                            is_recurring=instance.is_recurring,
-                            frequency=instance.frequency,
-                            service_type='servicing',
-                            call_status='not_called',
-                            calls_made=0,
-                            color=instance.color,
-                            duration=instance.duration,
-                            parent_job=instance,
-                            occurrence_index=last_index + i + 1,
-                        )
+                and instance.frequency
+                and instance.total_occurrences != occurrences):
+            instance.total_occurrences = occurrences
+            instance.save(update_fields=['total_occurrences'])
+
+        # When a recurring job is completed or skipped, create the next occurrence
+        if old_status not in ('completed', 'skip') and instance.status in ('completed', 'skip') and instance.is_recurring:
+            _spawn_next_occurrence(instance)
 
         return Response(self.get_serializer(instance).data)
 
@@ -232,26 +243,29 @@ class JobViewSet(viewsets.ModelViewSet):
             job_q |= Q(ghl_contact_id=ghl_contact_id)
         contact_jobs = Job.objects.filter(job_q)
 
-        # Earliest pending/scheduled servicing job per address
+        # Earliest pending/scheduled servicing job per product_id
         service_jobs = (
             contact_jobs
             .filter(service_type='servicing')
             .exclude(status__in=['completed', 'skip', 'not_interested'])
             .order_by('service_date')
+            .prefetch_related('job_products')
         )
-        next_service_by_address: dict = {}
+        next_service_by_product: dict = {}
         for j in service_jobs:
-            key = j.address.strip().lower()
-            if key not in next_service_by_address:
-                next_service_by_address[key] = j
+            for jp in j.job_products.all():
+                pid = str(jp.product_id)
+                if pid not in next_service_by_product:
+                    next_service_by_product[pid] = j
 
-        def next_svc_info(address: str) -> dict:
-            svc = next_service_by_address.get(address.strip().lower())
+        def next_svc_info(product_id: str, fallback_job=None) -> dict:
+            svc = next_service_by_product.get(str(product_id))
+            ref = svc or fallback_job
             return {
                 'next_service_date': svc.service_date.isoformat() if svc else None,
                 'next_service_status': svc.status if svc else None,
-                'is_recurring': svc.is_recurring if svc else False,
-                'frequency': svc.frequency if svc else None,
+                'is_recurring': ref.is_recurring if ref else False,
+                'frequency': ref.frequency if ref else None,
                 'service_complete': svc is None,
             }
 
@@ -287,6 +301,12 @@ class JobViewSet(viewsets.ModelViewSet):
             .select_related('product', 'job')
         )
 
+        # Fetch original install jobs for completions (for is_recurring/frequency fallback)
+        completion_job_ids = [c.job_id for c in install_completions if c.job_id]
+        original_jobs_map = {
+            str(j.id): j for j in Job.objects.filter(id__in=completion_job_ids)
+        } if completion_job_ids else {}
+
         # Batch product name lookup
         all_product_ids: set = set()
         for c in install_completions:
@@ -303,7 +323,7 @@ class JobViewSet(viewsets.ModelViewSet):
         } if all_product_ids else {}
 
         for c in install_completions:
-            svc = next_svc_info(c.address)
+            original_job = original_jobs_map.get(str(c.job_id)) if c.job_id else None
             for i, line in enumerate(c.product_lines or []):
                 pid = str(line.get('product_id', ''))
                 qty = float(line.get('quantity', 0))
@@ -319,11 +339,10 @@ class JobViewSet(viewsets.ModelViewSet):
                     'quantity': str(qty),
                     'unit_price': str(price),
                     'total': str(round(qty * price, 2)),
-                    **svc,
+                    **next_svc_info(pid, original_job),
                 })
 
         for jp in install_job_products:
-            svc = next_svc_info(jp.job.address)
             qty = float(jp.quantity)
             price = float(jp.unit_price)
             rows.append({
@@ -337,7 +356,7 @@ class JobViewSet(viewsets.ModelViewSet):
                 'quantity': str(qty),
                 'unit_price': str(price),
                 'total': str(round(qty * price, 2)),
-                **svc,
+                **next_svc_info(str(jp.product_id), jp.job),
             })
 
         rows.sort(key=lambda r: r['install_date'], reverse=True)
