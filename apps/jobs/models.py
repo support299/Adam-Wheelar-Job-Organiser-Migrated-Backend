@@ -57,7 +57,7 @@ class Job(models.Model):
         related_name='child_jobs',
     )
     occurrence_index = models.IntegerField(null=True, blank=True)
-    total_occurrences = models.IntegerField(null=True, blank=True)
+    total_occurrences = models.IntegerField(null=True, blank=True, default=1000)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
