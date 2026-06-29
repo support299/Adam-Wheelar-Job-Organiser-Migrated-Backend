@@ -67,14 +67,31 @@ class SavedPlanViewSet(viewsets.ModelViewSet):
             return self.get_paginated_response(serializer.data)
         return Response(serializer.data)
 
+    def _reschedule_jobs(self, job_ids):
+        ids = [jid for jid in (job_ids or []) if jid]
+        if ids:
+            Job.objects.filter(id__in=ids, status='scheduled').update(status='rescheduled')
+
     def perform_create(self, serializer):
         plan_date = serializer.validated_data.get('plan_date')
         new_staff_ids = set(serializer.validated_data.get('staff_ids') or [])
+        old_job_ids = set()
         if plan_date and new_staff_ids:
             for existing in SavedPlan.objects.filter(plan_date=plan_date):
                 if new_staff_ids.intersection(existing.staff_ids or []):
+                    old_job_ids.update(existing.ordered_job_ids or [])
                     existing.delete()
-        serializer.save()
+        plan = serializer.save()
+        new_job_ids = set(plan.ordered_job_ids or [])
+        # Only reschedule jobs that were in the old plan but removed from the new one
+        self._reschedule_jobs(old_job_ids - new_job_ids)
+
+    def perform_update(self, serializer):
+        old_job_ids = set(serializer.instance.ordered_job_ids or [])
+        plan = serializer.save()
+        new_job_ids = set(plan.ordered_job_ids or [])
+        # Only reschedule jobs that were removed from the plan (deselected)
+        self._reschedule_jobs(old_job_ids - new_job_ids)
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()

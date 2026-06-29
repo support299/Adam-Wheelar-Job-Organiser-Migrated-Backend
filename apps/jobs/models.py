@@ -18,6 +18,7 @@ class JobStatus(models.TextChoices):
     COMPLETED = 'completed', 'Completed'
     SKIP = 'skip', 'Skip'
     NOT_INTERESTED = 'not_interested', 'Not Interested'
+    RESCHEDULED = 'rescheduled', 'Rescheduled'
 
 
 class Job(models.Model):
