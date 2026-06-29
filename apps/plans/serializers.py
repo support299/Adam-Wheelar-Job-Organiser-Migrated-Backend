@@ -26,6 +26,36 @@ class SavedPlanSerializer(serializers.ModelSerializer):
     def get_progress(self, obj):
         return JobProgressSerializer(obj.progress.all(), many=True).data
 
+    def validate(self, data):
+        from apps.jobs.models import JobStaff
+        job_ids = data.get('ordered_job_ids') or []
+        if not job_ids:
+            return data
+
+        assignments = JobStaff.objects.filter(job_id__in=job_ids).values_list('job_id', 'staff_id')
+        job_staff_map = {}
+        for job_id, staff_id in assignments:
+            job_staff_map.setdefault(str(job_id), set()).add(str(staff_id))
+
+        all_staff_ids = set()
+        has_unassigned = False
+        for job_id in (str(jid) for jid in job_ids):
+            ids = job_staff_map.get(job_id, set())
+            if not ids:
+                has_unassigned = True
+            else:
+                all_staff_ids.update(ids)
+
+        if len(all_staff_ids) > 1:
+            raise serializers.ValidationError(
+                "All jobs in a plan must be assigned to the same staff member."
+            )
+        if has_unassigned and all_staff_ids:
+            raise serializers.ValidationError(
+                "Cannot mix assigned and unassigned jobs in the same plan."
+            )
+        return data
+
     class Meta:
         model = SavedPlan
         fields = [
