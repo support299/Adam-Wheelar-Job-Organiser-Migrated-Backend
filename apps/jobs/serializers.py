@@ -23,6 +23,7 @@ class JobProductLinesSerializer(serializers.Serializer):
 class JobSerializer(serializers.ModelSerializer):
     staff_ids = serializers.SerializerMethodField()
     series_count = serializers.SerializerMethodField()
+    last_call_at = serializers.SerializerMethodField()
     occurrences = serializers.IntegerField(write_only=True, required=False, default=1, min_value=1)
 
     def get_staff_ids(self, obj):
@@ -33,6 +34,11 @@ class JobSerializer(serializers.ModelSerializer):
             return obj.child_jobs.count() + 1
         return None
 
+    def get_last_call_at(self, obj):
+        # Populated by the JobViewSet queryset annotation; None on unannotated instances
+        value = getattr(obj, 'last_call_at', None)
+        return value.isoformat() if value else None
+
     class Meta:
         model = Job
         fields = [
@@ -41,9 +47,9 @@ class JobSerializer(serializers.ModelSerializer):
             'is_recurring', 'frequency', 'ghl_contact_id', 'service_type',
             'sale_date', 'call_status', 'calls_made', 'duration',
             'parent_job_id', 'occurrence_index', 'total_occurrences', 'series_count', 'occurrences',
-            'created_at', 'updated_at', 'staff_ids',
+            'created_at', 'updated_at', 'staff_ids', 'last_call_at',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'staff_ids', 'series_count', 'total_occurrences']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'staff_ids', 'series_count', 'total_occurrences', 'last_call_at']
 
 
 class JobStaffIdsSerializer(serializers.Serializer):

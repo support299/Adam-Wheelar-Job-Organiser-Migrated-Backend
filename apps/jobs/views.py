@@ -2,7 +2,7 @@ import calendar
 from datetime import date, timedelta
 
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import OuterRef, Q, Subquery
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
@@ -24,6 +24,7 @@ def _add_frequency(d: date, frequency: str) -> date:
         return date(year, month, day)
     return d
 
+from apps.contacts.models import ContactNote
 from apps.products.models import Product
 from apps.staff.models import Staff
 from config.pagination import OptionalPageNumberPagination
@@ -89,7 +90,13 @@ def _spawn_next_occurrence(completed_job: Job):
 
 
 class JobViewSet(viewsets.ModelViewSet):
-    queryset = Job.objects.prefetch_related('job_staff', 'child_jobs').all()
+    queryset = Job.objects.prefetch_related('job_staff', 'child_jobs').annotate(
+        last_call_at=Subquery(
+            ContactNote.objects.filter(job_id=OuterRef('id'))
+            .order_by('-created_at')
+            .values('created_at')[:1]
+        )
+    )
     serializer_class = JobSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = JobFilter
