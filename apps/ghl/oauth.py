@@ -239,14 +239,47 @@ def sync_location_contacts() -> int:
     return synced
 
 
+def _find_user_id_by_name(access_token: str, company_id: str, location_id: str, name: str) -> str:
+    """Search the location's GHL users and return the id of the one whose name matches."""
+    resp = requests.get(
+        'https://services.leadconnectorhq.com/users/search',
+        params={'companyId': company_id, 'locationId': location_id},
+        headers={
+            'Accept': 'application/json',
+            'Version': 'v3',
+            'Authorization': f'Bearer {access_token}',
+        },
+        timeout=10,
+    )
+    resp.raise_for_status()
+    users = resp.json().get('users', [])
+
+    target = name.strip().lower()
+    for user in users:
+        if (user.get('name') or '').strip().lower() == target:
+            return user['id']
+    raise ValueError(f'No GHL user found with name "{name}".')
+
+
 def update_contact_custom_field(contact_id: str, name_value: str) -> dict:
-    """Set the 'name' custom field on a GHL contact via PUT /contacts/{id}."""
-    access_token, _ = get_valid_location_token()
+    """Match a GHL user by name and store their user id in the contact's custom field."""
+    access_token, location_id = get_valid_location_token()
+
+    company_id = (
+        GhlToken.objects.filter(location_id=location_id)
+        .values_list('company_id', flat=True)
+        .first()
+    )
+    if not company_id:
+        raise ValueError('No GHL company id found for the connected location.')
+
+    user_id = _find_user_id_by_name(access_token, company_id, location_id, name_value)
+
     resp = requests.put(
         f'{settings.GHL_CONTACTS_URL}/{contact_id}',
         json={
             'customFields': [
-                {'id': GHL_NAME_CUSTOM_FIELD_ID, 'fieldValue': name_value},
+                {'id': GHL_NAME_CUSTOM_FIELD_ID, 'fieldValue': user_id},
             ],
         },
         headers={
