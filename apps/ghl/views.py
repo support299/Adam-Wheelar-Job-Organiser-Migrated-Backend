@@ -1,6 +1,8 @@
 import logging
 
 from django.http import HttpResponseRedirect
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -14,8 +16,9 @@ from .oauth import (
     get_token_status,
     refresh_company_token,
     sync_location_contacts,
+    update_contact_custom_field,
 )
-from .serializers import ExchangeCodeSerializer
+from .serializers import ExchangeCodeSerializer, UpdateContactCustomFieldSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -102,4 +105,24 @@ class GhlSyncContactsView(APIView):
             return Response({'synced': count})
         except Exception as exc:
             logger.error('GHL contact sync failed: %s', exc)
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class GhlUpdateContactView(APIView):
+    """Open webhook endpoint called by GHL workflows to update a contact's name custom field."""
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        serializer = UpdateContactCustomFieldSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            result = update_contact_custom_field(
+                contact_id=serializer.validated_data['contact_id'],
+                name_value=serializer.validated_data['customData']['name'],
+            )
+            return Response({'success': True, 'contact': result})
+        except Exception as exc:
+            logger.error('GHL contact update failed: %s', exc)
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)

@@ -12,6 +12,8 @@ from .models import GhlToken
 
 logger = logging.getLogger(__name__)
 
+GHL_NAME_CUSTOM_FIELD_ID = 'pm9cdiSMgL9HHQRli7nj'
+
 
 def _post_token(params: dict) -> dict:
     body = {
@@ -235,6 +237,28 @@ def sync_location_contacts() -> int:
 
     logger.info('GHL contact sync complete: %d contacts upserted for location %s', synced, location_id)
     return synced
+
+
+def update_contact_custom_field(contact_id: str, name_value: str) -> dict:
+    """Set the 'name' custom field on a GHL contact via PUT /contacts/{id}."""
+    access_token, _ = get_valid_location_token()
+    resp = requests.put(
+        f'{settings.GHL_CONTACTS_URL}/{contact_id}',
+        json={
+            'customFields': [
+                {'id': GHL_NAME_CUSTOM_FIELD_ID, 'fieldValue': name_value},
+            ],
+        },
+        headers={
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Version': 'v3',
+            'Authorization': f'Bearer {access_token}',
+        },
+        timeout=10,
+    )
+    resp.raise_for_status()
+    return resp.json()
 
 
 def get_install_config() -> dict:
