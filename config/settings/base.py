@@ -152,7 +152,7 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_BEAT_SCHEDULE = {
     'refresh-ghl-tokens': {
         'task': 'apps.ghl.tasks.refresh_ghl_tokens',
-        'schedule': 1800,  # every 30 minutes
+        'schedule': 36000,  # every 10 hours
     },
 }
 
