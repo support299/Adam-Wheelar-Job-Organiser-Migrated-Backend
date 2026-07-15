@@ -12,7 +12,10 @@ from .models import GhlToken
 
 logger = logging.getLogger(__name__)
 
-GHL_NAME_CUSTOM_FIELD_ID = 'pm9cdiSMgL9HHQRli7nj'
+GHL_USER_ID_CUSTOM_FIELD_ID = 'pm9cdiSMgL9HHQRli7nj'
+GHL_USER_PHONE_CUSTOM_FIELD_ID = '0NBDQySh0zF6np4be6Ul'
+GHL_USER_EMAIL_CUSTOM_FIELD_ID = 'mgoGrdujQ7Oe7YnWlVlx'
+GHL_USER_NAME_CUSTOM_FIELD_ID = 'KnLQaTQwsD3NaB6fbrxa'
 
 
 def _post_token(params: dict) -> dict:
@@ -239,8 +242,8 @@ def sync_location_contacts() -> int:
     return synced
 
 
-def _find_user_id_by_name(access_token: str, company_id: str, location_id: str, name: str) -> str:
-    """Search the location's GHL users and return the id of the one whose name matches."""
+def _find_user_by_name(access_token: str, company_id: str, location_id: str, name: str) -> dict:
+    """Search the location's GHL users and return the one whose name matches."""
     resp = requests.get(
         'https://services.leadconnectorhq.com/users/search',
         params={'companyId': company_id, 'locationId': location_id},
@@ -257,12 +260,12 @@ def _find_user_id_by_name(access_token: str, company_id: str, location_id: str, 
     target = name.strip().lower()
     for user in users:
         if (user.get('name') or '').strip().lower() == target:
-            return user['id']
+            return user
     raise ValueError(f'No GHL user found with name "{name}".')
 
 
 def update_contact_custom_field(contact_id: str, name_value: str) -> dict:
-    """Match a GHL user by name and store their user id in the contact's custom field."""
+    """Match a GHL user by name and store their id, phone, email and name in the contact's custom fields."""
     access_token, location_id = get_valid_location_token()
 
     company_id = (
@@ -273,13 +276,22 @@ def update_contact_custom_field(contact_id: str, name_value: str) -> dict:
     if not company_id:
         raise ValueError('No GHL company id found for the connected location.')
 
-    user_id = _find_user_id_by_name(access_token, company_id, location_id, name_value)
+    user = _find_user_by_name(access_token, company_id, location_id, name_value)
+
+    field_values = [
+        (GHL_USER_ID_CUSTOM_FIELD_ID, user.get('id')),
+        (GHL_USER_PHONE_CUSTOM_FIELD_ID, user.get('phone')),
+        (GHL_USER_EMAIL_CUSTOM_FIELD_ID, user.get('email')),
+        (GHL_USER_NAME_CUSTOM_FIELD_ID, user.get('name')),
+    ]
 
     resp = requests.put(
         f'{settings.GHL_CONTACTS_URL}/{contact_id}',
         json={
             'customFields': [
-                {'id': GHL_NAME_CUSTOM_FIELD_ID, 'fieldValue': user_id},
+                {'id': field_id, 'fieldValue': value}
+                for field_id, value in field_values
+                if value
             ],
         },
         headers={
