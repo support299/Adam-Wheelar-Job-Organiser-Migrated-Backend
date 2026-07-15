@@ -279,10 +279,10 @@ def update_contact_custom_field(contact_id: str, name_value: str) -> dict:
     user = _find_user_by_name(access_token, company_id, location_id, name_value)
 
     field_values = [
-        (GHL_USER_ID_CUSTOM_FIELD_ID, user.get('id')),
-        (GHL_USER_PHONE_CUSTOM_FIELD_ID, user.get('phone')),
-        (GHL_USER_EMAIL_CUSTOM_FIELD_ID, user.get('email')),
-        (GHL_USER_NAME_CUSTOM_FIELD_ID, user.get('name')),
+        (GHL_USER_ID_CUSTOM_FIELD_ID, user.get('id') or ''),
+        (GHL_USER_PHONE_CUSTOM_FIELD_ID, user.get('phone') or ''),
+        (GHL_USER_EMAIL_CUSTOM_FIELD_ID, user.get('email') or ''),
+        (GHL_USER_NAME_CUSTOM_FIELD_ID, user.get('name') or ''),
     ]
 
     resp = requests.put(
@@ -291,7 +291,6 @@ def update_contact_custom_field(contact_id: str, name_value: str) -> dict:
             'customFields': [
                 {'id': field_id, 'fieldValue': value}
                 for field_id, value in field_values
-                if value
             ],
         },
         headers={
