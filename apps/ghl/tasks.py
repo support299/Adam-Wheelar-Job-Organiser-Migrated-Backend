@@ -20,3 +20,16 @@ def refresh_ghl_tokens(self):
     except Exception as exc:
         logger.error('GHL token refresh failed: %s', exc)
         raise self.retry(exc=exc, countdown=60)
+
+
+@shared_task(name='apps.ghl.tasks.sync_location_contacts_task', bind=True, max_retries=3)
+def sync_location_contacts_task(self):
+    """Sync all GHL contacts for the connected location in the background."""
+    try:
+        from .oauth import sync_location_contacts
+        count = sync_location_contacts()
+        logger.info('GHL contact sync task complete: %d contacts synced.', count)
+        return {'synced': count}
+    except Exception as exc:
+        logger.error('GHL contact sync task failed: %s', exc)
+        raise self.retry(exc=exc, countdown=60)
