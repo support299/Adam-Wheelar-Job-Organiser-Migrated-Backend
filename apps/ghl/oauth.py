@@ -185,17 +185,20 @@ def sync_location_contacts() -> int:
     access_token, location_id = get_valid_location_token()
     headers = {
         'Authorization': f'Bearer {access_token}',
-        'Version': '2021-07-28',
+        'Version': '2023-02-21',
         'Accept': 'application/json',
     }
 
     synced = 0
     start_after_id = None
+    start_after = None
 
     while True:
         params: dict = {'locationId': location_id, 'limit': 100}
         if start_after_id:
             params['startAfterId'] = start_after_id
+        if start_after:
+            params['startAfter'] = start_after
 
         resp = requests.get(
             settings.GHL_CONTACTS_URL,
@@ -235,10 +238,13 @@ def sync_location_contacts() -> int:
 
         meta = data.get('meta', {})
         next_cursor = meta.get('startAfterId')
+        next_start_after = meta.get('startAfter')
         # Stop if no next cursor or we got a partial page
         if not next_cursor or len(contacts) < 100:
             break
         start_after_id = next_cursor
+        start_after = next_start_after
+        print(f'GHL contact sync: next cursor is {start_after_id}, startAfter={start_after} for location {location_id}')
 
     logger.info('GHL contact sync complete: %d contacts upserted for location %s', synced, location_id)
     return synced
