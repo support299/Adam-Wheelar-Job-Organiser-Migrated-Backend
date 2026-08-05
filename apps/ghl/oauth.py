@@ -239,6 +239,7 @@ def sync_location_contacts() -> int:
         if not next_cursor or len(contacts) < 100:
             break
         start_after_id = next_cursor
+        print(f'GHL contact sync: next cursor is {start_after_id} for location {location_id}')
 
     logger.info('GHL contact sync complete: %d contacts upserted for location %s', synced, location_id)
     return synced
