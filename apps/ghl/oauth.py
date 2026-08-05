@@ -212,7 +212,6 @@ def sync_location_contacts() -> int:
 
         for c in contacts:
             contact_id = c.get('id')
-            logger.info('GHL contact sync: upserting contact %s for location %s', contact_id, location_id)
             if not contact_id:
                 continue
             first = c.get('firstName') or ''
