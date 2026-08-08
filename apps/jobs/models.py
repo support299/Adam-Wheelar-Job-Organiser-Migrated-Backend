@@ -51,6 +51,7 @@ class Job(models.Model):
     sale_date = models.DateField(blank=True, null=True)
     call_status = models.TextField(default='not_called')
     calls_made = models.IntegerField(default=0)
+    completed_at = models.DateTimeField(blank=True, null=True)
     duration = models.IntegerField(default=60)
     parent_job = models.ForeignKey(
         'self', null=True, blank=True, on_delete=models.SET_NULL,
