@@ -116,17 +116,33 @@ class UpsertJobProgressView(APIView):
         serializer = UpsertJobProgressSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         d = serializer.validated_data
+        new_status = d.get('status', 'pending')
+
+        previous = JobProgress.objects.filter(
+            plan_id=d['plan_id'], job_id=d['job_id'], staff_id=d['staff_id'],
+        ).values_list('status', flat=True).first()
 
         obj, created = JobProgress.objects.update_or_create(
             plan_id=d['plan_id'],
             job_id=d['job_id'],
             staff_id=d['staff_id'],
             defaults={
-                'status': d.get('status', 'pending'),
+                'status': new_status,
                 'actual_km': d.get('actual_km'),
                 'notes': d.get('notes'),
             },
         )
+
+        # JobProgress.status values actually sent by the frontend are
+        # pending/in_progress/done/cancelled (see jobProgress.ts) — "done" is
+        # the completed signal, not "completed".
+        if new_status == 'done':
+            Job.objects.filter(id=d['job_id']).update(status='completed')
+        elif previous == 'done' and new_status == 'pending':
+            Job.objects.filter(id=d['job_id']).update(status='rescheduled')
+        elif new_status == 'cancelled':
+            Job.objects.filter(id=d['job_id']).update(status='skip')
+
         return Response(
             JobProgressSerializer(obj).data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
