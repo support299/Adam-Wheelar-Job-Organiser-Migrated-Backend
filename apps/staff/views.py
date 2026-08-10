@@ -1,9 +1,9 @@
-from rest_framework import status, viewsets
+from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import Staff
-from .serializers import CreateStaffAuthSerializer, StaffSerializer
+from .models import Staff, StaffPayout
+from .serializers import CreateStaffAuthSerializer, StaffPayoutSerializer, StaffSerializer
 
 
 class StaffViewSet(viewsets.ModelViewSet):
@@ -24,3 +24,13 @@ class StaffViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save(staff=staff)
         return Response({'skipped': False}, status=status.HTTP_200_OK)
+
+
+class StaffPayoutViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
+    queryset = StaffPayout.objects.all()
+    serializer_class = StaffPayoutSerializer

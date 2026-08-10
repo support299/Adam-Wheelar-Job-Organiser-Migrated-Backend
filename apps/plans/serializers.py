@@ -1,10 +1,16 @@
 from rest_framework import serializers
 
 from apps.jobs.serializers import JobSerializer
+from config.fields import RoundingDecimalField
 from .models import JobProgress, SavedPlan
 
 
 class SavedPlanSerializer(serializers.ModelSerializer):
+    # Optimizer output carries more precision than the DB column allows —
+    # round instead of rejecting.
+    road_km = RoundingDecimalField(
+        max_digits=10, decimal_places=2, required=False, allow_null=True,
+    )
     jobs = serializers.SerializerMethodField()
     progress = serializers.SerializerMethodField()
 

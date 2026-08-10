@@ -30,7 +30,8 @@ def _wp(p: dict) -> dict:
 class DistanceMatrixView(APIView):
     """Compute an N×N road distance/duration matrix via Google Routes API.
 
-    Returns flat arrays (row-major order). Unreachable pairs are encoded as -1.
+    Returns nested N×N arrays (distance[i][j], duration[i][j]). Unreachable
+    pairs are encoded as -1.
     """
 
     def post(self, request):
@@ -39,8 +40,8 @@ class DistanceMatrixView(APIView):
         points = serializer.validated_data['points']
         n = len(points)
 
-        distance = [0] * (n * n)
-        duration = [0] * (n * n)
+        distance = [[0] * n for _ in range(n)]
+        duration = [[0] * n for _ in range(n)]
 
         if n <= 1:
             return Response({'n': n, 'distance': distance, 'duration': duration})
@@ -91,13 +92,13 @@ class DistanceMatrixView(APIView):
                         and (not el.get('status', {}).get('code'))
                     )
                     if ok and el.get('distanceMeters') is not None and el.get('duration'):
-                        distance[i * n + j] = el['distanceMeters']
-                        duration[i * n + j] = int(
+                        distance[i][j] = el['distanceMeters']
+                        duration[i][j] = int(
                             el['duration'].rstrip('s') or 0
                         )
                     else:
-                        distance[i * n + j] = -1
-                        duration[i * n + j] = -1
+                        distance[i][j] = -1
+                        duration[i][j] = -1
 
         return Response({'n': n, 'distance': distance, 'duration': duration})
 

@@ -30,3 +30,21 @@ class Staff(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class StaffPayout(models.Model):
+    staff = models.ForeignKey(Staff, on_delete=models.CASCADE, related_name='payouts')
+    period_from = models.DateField()
+    period_to = models.DateField()
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    notes = models.TextField(blank=True, null=True)
+    paid_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-paid_at']
+        indexes = [
+            models.Index(fields=['staff']),
+        ]
+
+    def __str__(self):
+        return f'{self.staff_id} — ${self.amount} ({self.period_from} to {self.period_to})'

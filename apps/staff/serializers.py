@@ -2,7 +2,8 @@ from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
-from .models import Staff
+from config.fields import RoundingDecimalField
+from .models import Staff, StaffPayout
 
 
 class StaffSerializer(serializers.ModelSerializer):
@@ -18,6 +19,18 @@ class StaffSerializer(serializers.ModelSerializer):
 
     def get_has_login(self, obj):
         return obj.user_id is not None
+
+
+class StaffPayoutSerializer(serializers.ModelSerializer):
+    staff_id = serializers.PrimaryKeyRelatedField(source='staff', queryset=Staff.objects.all())
+    # Frontend amount input isn't step-locked to 2dp everywhere (e.g. pasted
+    # values) — round instead of rejecting, same as SavedPlan.road_km.
+    amount = RoundingDecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        model = StaffPayout
+        fields = ['id', 'staff_id', 'period_from', 'period_to', 'amount', 'notes', 'paid_at']
+        read_only_fields = ['id', 'paid_at']
 
 
 class CreateStaffAuthSerializer(serializers.Serializer):
