@@ -38,6 +38,7 @@ LOCAL_APPS = [
     'apps.contacts',
     'apps.ghl',
     'apps.maps',
+    'apps.dashboard',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
