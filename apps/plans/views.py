@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.jobs.models import Job
+from apps.jobs.views import _spawn_next_occurrence
 from .models import JobProgress, SavedPlan
 from .serializers import (
     JobProgressSerializer,
@@ -136,12 +137,24 @@ class UpsertJobProgressView(APIView):
         # JobProgress.status values actually sent by the frontend are
         # pending/in_progress/done/cancelled (see jobProgress.ts) — "done" is
         # the completed signal, not "completed".
+        job_status = None
         if new_status == 'done':
-            Job.objects.filter(id=d['job_id']).update(status='completed')
+            job_status = 'completed'
         elif previous == 'done' and new_status == 'pending':
-            Job.objects.filter(id=d['job_id']).update(status='rescheduled')
+            job_status = 'rescheduled'
         elif new_status == 'cancelled':
-            Job.objects.filter(id=d['job_id']).update(status='skip')
+            job_status = 'skip'
+
+        if job_status:
+            job = Job.objects.filter(id=d['job_id']).first()
+            if job:
+                old_job_status = job.status
+                job.status = job_status
+                job.save(update_fields=['status'])
+                # Mirror JobViewSet.update(): spawn the next occurrence when a
+                # recurring job transitions into completed/skip.
+                if old_job_status not in ('completed', 'skip') and job.status in ('completed', 'skip') and job.is_recurring:
+                    _spawn_next_occurrence(job)
 
         return Response(
             JobProgressSerializer(obj).data,
