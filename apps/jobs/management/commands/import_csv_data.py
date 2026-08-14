@@ -16,7 +16,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from apps.contacts.models import ContactNote, GhlContact, GhlUser
-from apps.jobs.models import Job, JobCompletion, JobProduct, JobStaff
+from apps.jobs.models import Job, JobProduct, JobStaff
 from apps.locations.models import BaseLocation
 from apps.plans.models import JobProgress, SavedPlan
 from apps.products.models import Product
@@ -83,13 +83,6 @@ def _str(s: str) -> str | None:
     return s if s else None
 
 
-def _float(s: str) -> float | None:
-    try:
-        return float(s) if s else None
-    except ValueError:
-        return None
-
-
 def _int(s: str, default: int = 0) -> int:
     try:
         return int(s) if s else default
@@ -112,7 +105,6 @@ class Command(BaseCommand):
             self._jobs()
             self._job_staff()
             self._job_products()
-            self._job_completions()
             self._saved_plans()
             self._job_progress()
             self._contact_notes()
@@ -276,37 +268,6 @@ class Command(BaseCommand):
                     self.stderr.write(f'    skip job_products {r["id"]}: {e}')
                     skipped += 1
         self.stdout.write(f'  job_products    {n} (skipped {skipped})')
-
-    def _job_completions(self):
-        n = 0
-        for path in _find('job_completions-*.csv'):
-            for r in _read(path):
-                jc, created = JobCompletion.objects.get_or_create(
-                    id=r['id'],
-                    defaults={
-                        'job_id': r.get('job_id') or None,
-                        'service_date': _date(r['service_date']),
-                        'service_time': _time(r.get('service_time', '')),
-                        'service_value': r.get('service_value') or '0',
-                        'name': r['name'],
-                        'email': r['email'],
-                        'phone': _str(r.get('phone', '')),
-                        'address': r['address'],
-                        'lat': _float(r.get('lat', '')),
-                        'lng': _float(r.get('lng', '')),
-                        'notes': _str(r.get('notes', '')),
-                        'staff_ids': _json(r.get('staff_ids', '')) or [],
-                        'product_lines': _json(r.get('product_lines', '')) or [],
-                        'service_type': r.get('service_type') or 'installation',
-                        'sale_date': _date(r.get('sale_date', '')),
-                    },
-                )
-                JobCompletion.objects.filter(id=r['id']).update(
-                    completed_at=_dt(r.get('completed_at', '')),
-                    created_at=_dt(r.get('created_at', '')),
-                )
-                n += 1
-        self.stdout.write(f'  job_completions {n}')
 
     def _saved_plans(self):
         n = 0

@@ -29,10 +29,9 @@ from apps.products.models import Product
 from apps.staff.models import Staff
 from config.pagination import OptionalPageNumberPagination
 
-from .filters import JobCompletionFilter, JobFilter
-from .models import Job, JobCompletion, JobProduct, JobStaff
+from .filters import JobFilter
+from .models import Job, JobProduct, JobStaff
 from .serializers import (
-    JobCompletionSerializer,
     JobProductLinesSerializer,
     JobProductWriteSerializer,
     JobSerializer,
@@ -278,29 +277,6 @@ class JobViewSet(viewsets.ModelViewSet):
 
         rows = []
 
-        # --- Installation completions ---
-        # Derive emails to match completions (they don't store ghl_contact_id)
-        completion_emails: set = set()
-        if email:
-            completion_emails.add(email)
-        if ghl_contact_id:
-            for e in (
-                contact_jobs.exclude(email='')
-                .values_list('email', flat=True)
-                .distinct()
-            ):
-                completion_emails.add(e.lower())
-
-        if completion_emails:
-            email_q = Q()
-            for e in completion_emails:
-                email_q |= Q(email__iexact=e)
-            install_completions = JobCompletion.objects.filter(
-                email_q, service_type='installation'
-            )
-        else:
-            install_completions = JobCompletion.objects.none()
-
         # --- Installation job products ---
         install_jobs = contact_jobs.filter(service_type='installation')
         install_job_products = (
@@ -308,46 +284,12 @@ class JobViewSet(viewsets.ModelViewSet):
             .select_related('product', 'job')
         )
 
-        # Fetch original install jobs for completions (for is_recurring/frequency fallback)
-        completion_job_ids = [c.job_id for c in install_completions if c.job_id]
-        original_jobs_map = {
-            str(j.id): j for j in Job.objects.filter(id__in=completion_job_ids)
-        } if completion_job_ids else {}
-
-        # Batch product name lookup
-        all_product_ids: set = set()
-        for c in install_completions:
-            for line in (c.product_lines or []):
-                pid = line.get('product_id')
-                if pid:
-                    all_product_ids.add(str(pid))
-        for jp in install_job_products:
-            all_product_ids.add(str(jp.product_id))
-
         product_name_map = {
             str(p.id): p.name
-            for p in Product.objects.filter(id__in=all_product_ids)
-        } if all_product_ids else {}
-
-        for c in install_completions:
-            original_job = original_jobs_map.get(str(c.job_id)) if c.job_id else None
-            for i, line in enumerate(c.product_lines or []):
-                pid = str(line.get('product_id', ''))
-                qty = float(line.get('quantity', 0))
-                price = float(line.get('unit_price', 0))
-                rows.append({
-                    'id': f'c-{c.id}-{i}',
-                    'install_date': c.completed_at.isoformat(),
-                    'install_status': 'completed',
-                    'source': 'completion',
-                    'address': c.address,
-                    'product_id': pid,
-                    'product_name': product_name_map.get(pid, 'Product'),
-                    'quantity': str(qty),
-                    'unit_price': str(price),
-                    'total': str(round(qty * price, 2)),
-                    **next_svc_info(pid, original_job),
-                })
+            for p in Product.objects.filter(
+                id__in={str(jp.product_id) for jp in install_job_products}
+            )
+        }
 
         for jp in install_job_products:
             qty = float(jp.quantity)
@@ -356,7 +298,6 @@ class JobViewSet(viewsets.ModelViewSet):
                 'id': f'j-{jp.id}',
                 'install_date': jp.job.service_date.isoformat(),
                 'install_status': jp.job.status,
-                'source': 'job',
                 'address': jp.job.address,
                 'product_id': str(jp.product_id),
                 'product_name': product_name_map.get(str(jp.product_id), 'Product'),
@@ -442,12 +383,3 @@ class JobViewSet(viewsets.ModelViewSet):
                     for l in lines
                 ])
         return Response({'detail': 'Products updated.'})
-
-
-class JobCompletionViewSet(viewsets.ModelViewSet):
-    queryset = JobCompletion.objects.all()
-    serializer_class = JobCompletionSerializer
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_class = JobCompletionFilter
-    ordering_fields = ['completed_at', 'service_date']
-    ordering = ['-completed_at']

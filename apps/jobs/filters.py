@@ -2,7 +2,7 @@ from datetime import date, timedelta
 
 import django_filters
 
-from .models import Job, JobCompletion
+from .models import Job
 
 
 class JobFilter(django_filters.FilterSet):
@@ -47,14 +47,3 @@ class JobFilter(django_filters.FilterSet):
         if value == 'due_60':
             return qs.filter(service_date__gt=today + timedelta(days=30), service_date__lte=today + timedelta(days=60))
         return queryset
-
-
-class JobCompletionFilter(django_filters.FilterSet):
-    service_date_from = django_filters.DateFilter(field_name='service_date', lookup_expr='gte')
-    service_date_to = django_filters.DateFilter(field_name='service_date', lookup_expr='lte')
-    service_type = django_filters.CharFilter(field_name='service_type')
-    job_id = django_filters.UUIDFilter(field_name='job_id')
-
-    class Meta:
-        model = JobCompletion
-        fields = ['service_type', 'job_id']

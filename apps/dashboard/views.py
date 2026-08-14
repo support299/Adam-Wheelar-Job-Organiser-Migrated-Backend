@@ -3,20 +3,19 @@ from datetime import date
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.jobs.models import Job, JobCompletion
+from apps.jobs.models import Job, JobProduct
 from apps.plans.models import JobProgress, SavedPlan
-from apps.products.models import Product
 from apps.staff.models import Staff
 
 OPEN_STATUSES = ('pending', 'scheduled', 'rescheduled')
+DONE_STATUSES = ('completed', 'skip')
 
 
 class DashboardView(APIView):
     """Single aggregated endpoint backing the Dashboard page.
 
-    Replaces separate jobs/completions/plans/staff/products fetches with
-    server-side filtering + aggregation, driven by query params:
-    date_from, date_to.
+    Replaces separate jobs/plans/staff/products fetches with server-side
+    filtering + aggregation, driven by query params: date_from, date_to.
     """
 
     def get(self, request):
@@ -31,12 +30,10 @@ class DashboardView(APIView):
             jobs = jobs.filter(service_date__lte=date_to)
         jobs = list(jobs)
 
-        completions = JobCompletion.objects.all()
-        if date_from:
-            completions = completions.filter(service_date__gte=date_from)
-        if date_to:
-            completions = completions.filter(service_date__lte=date_to)
-        completions = list(completions)
+        completions = [j for j in jobs if j.status in DONE_STATUSES]
+        completion_lines = list(
+            JobProduct.objects.filter(job__in=completions).select_related('product')
+        )
 
         plans = SavedPlan.objects.all()
         if date_from:
@@ -64,37 +61,30 @@ class DashboardView(APIView):
             if j.status in OPEN_STATUSES:
                 pipeline_value += float(j.service_value or 0)
 
-        service_revenue = sum(float(c.service_value or 0) for c in completions)
-        installs_completed = sum(1 for c in completions if c.service_type == 'installation')
+        service_revenue = sum(float(j.service_value or 0) for j in completions)
+        installs_completed = sum(1 for j in completions if j.service_type == 'installation')
 
         product_totals: dict = {}
         sales_revenue = 0.0
-        for c in completions:
-            for line in (c.product_lines or []):
-                pid = line.get('product_id')
-                if not pid:
-                    continue
-                qty = float(line.get('quantity') or 0)
-                price = float(line.get('unit_price') or 0)
-                total = qty * price
-                sales_revenue += total
-                entry = product_totals.setdefault(pid, {'qty': 0.0, 'revenue': 0.0})
-                entry['qty'] += qty
-                entry['revenue'] += total
+        for line in completion_lines:
+            pid = str(line.product_id)
+            qty = float(line.quantity)
+            price = float(line.unit_price)
+            total = qty * price
+            sales_revenue += total
+            entry = product_totals.setdefault(pid, {'qty': 0.0, 'revenue': 0.0, 'name': line.product.name})
+            entry['qty'] += qty
+            entry['revenue'] += total
 
-        top_product_ids = sorted(product_totals.items(), key=lambda kv: kv[1]['revenue'], reverse=True)[:8]
-        product_names = {
-            str(p.id): p.name
-            for p in Product.objects.filter(id__in=[pid for pid, _ in top_product_ids])
-        }
+        top_product_entries = sorted(product_totals.items(), key=lambda kv: kv[1]['revenue'], reverse=True)[:8]
         top_products = [
             {
                 'product_id': pid,
-                'product_name': product_names.get(pid, 'Unknown product'),
+                'product_name': totals['name'],
                 'qty': totals['qty'],
                 'revenue': totals['revenue'],
             }
-            for pid, totals in top_product_ids
+            for pid, totals in top_product_entries
         ]
 
         total_km = sum(float(p.road_km or 0) for p in plans)
@@ -104,7 +94,7 @@ class DashboardView(APIView):
             key=lambda j: (j.service_date, j.service_time),
         )[:8]
 
-        recent_completions = sorted(completions, key=lambda c: c.completed_at, reverse=True)[:8]
+        recent_completions = sorted(completions, key=lambda j: j.updated_at, reverse=True)[:8]
 
         return Response({
             'stats': {
@@ -136,12 +126,12 @@ class DashboardView(APIView):
             ],
             'recent_completions': [
                 {
-                    'id': str(c.id),
-                    'name': c.name,
-                    'service_date': c.service_date.isoformat(),
-                    'service_value': float(c.service_value or 0),
+                    'id': str(j.id),
+                    'name': j.name,
+                    'service_date': j.service_date.isoformat(),
+                    'service_value': float(j.service_value or 0),
                 }
-                for c in recent_completions
+                for j in recent_completions
             ],
         })
 

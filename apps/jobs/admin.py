@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Job, JobCompletion, JobProduct, JobStaff
+from .models import Job, JobProduct, JobStaff
 
 
 class JobStaffInline(admin.TabularInline):
@@ -20,12 +20,3 @@ class JobAdmin(admin.ModelAdmin):
     search_fields = ['name', 'email', 'phone', 'address']
     date_hierarchy = 'service_date'
     inlines = [JobStaffInline, JobProductInline]
-
-
-@admin.register(JobCompletion)
-class JobCompletionAdmin(admin.ModelAdmin):
-    list_display = ['name', 'email', 'service_date', 'service_type', 'service_value', 'completed_at']
-    list_filter = ['service_type']
-    search_fields = ['name', 'email', 'phone']
-    date_hierarchy = 'service_date'
-    readonly_fields = ['id', 'completed_at', 'created_at']

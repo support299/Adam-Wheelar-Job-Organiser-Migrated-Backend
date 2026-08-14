@@ -17,7 +17,6 @@ urlpatterns = [
     # Core resources
     path('api/dashboard/', include('apps.dashboard.urls')),
     path('api/jobs/', include('apps.jobs.urls')),
-    path('api/completions/', include('apps.jobs.completion_urls')),
     path('api/staff/', include('apps.staff.urls')),
     path('api/products/', include('apps.products.urls')),
     path('api/plans/', include('apps.plans.urls')),
