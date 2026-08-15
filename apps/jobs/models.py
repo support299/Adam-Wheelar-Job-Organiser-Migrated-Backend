@@ -21,6 +21,11 @@ class JobStatus(models.TextChoices):
     RESCHEDULED = 'rescheduled', 'Rescheduled'
 
 
+class PaymentStatus(models.TextChoices):
+    UNPAID = 'unpaid', 'Unpaid'
+    PAID = 'paid', 'Paid'
+
+
 class Job(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.TextField()
@@ -49,6 +54,9 @@ class Job(models.Model):
     import_contact_id = models.TextField(blank=True, null=True, unique=True)
     service_type = models.TextField(default='installation')
     sale_date = models.DateField(blank=True, null=True)
+    payment_status = models.CharField(
+        max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.PAID
+    )
     call_status = models.TextField(default='not_called')
     calls_made = models.IntegerField(default=0)
     completed_at = models.DateTimeField(blank=True, null=True)

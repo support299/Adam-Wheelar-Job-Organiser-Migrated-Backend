@@ -67,6 +67,7 @@ def _spawn_next_occurrence(completed_job: Job):
             is_recurring=True,
             frequency=root.frequency,
             service_type='servicing',
+            payment_status='unpaid',
             call_status='not_called',
             calls_made=0,
             duration=root.duration,
