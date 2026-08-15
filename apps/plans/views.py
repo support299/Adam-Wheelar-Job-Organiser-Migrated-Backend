@@ -29,18 +29,20 @@ def _write_jobs_csv(response, job_rows, extra_headers=None):
     staff_map = {str(s.id): s.name for s in Staff.objects.filter(id__in=staff_ids)}
 
     product_lines: dict = {}
+    product_names: dict = {}
     for jp in JobProduct.objects.filter(job__in=jobs).select_related('product'):
         product_lines.setdefault(str(jp.job_id), []).append(
             f'{jp.product.name} x{jp.quantity} @ ${jp.unit_price}'
         )
+        product_names.setdefault(str(jp.job_id), []).append(jp.product.name)
 
     writer = csv.writer(response)
     writer.writerow([
         *extra_headers,
         'Job Name', 'Contact ID', 'Email', 'Phone', 'Address', 'Latitude', 'Longitude',
         'Service Date', 'Service Time', 'Service Type', 'Status', 'Payment Status',
-        'Amount', 'Assigned Staff', 'Products', 'Notes', 'Call Status', 'Calls Made',
-        'Recurring', 'Frequency',
+        'Amount', 'Assigned Staff', 'Products', 'Product Names', 'Notes', 'Call Status',
+        'Calls Made', 'Recurring', 'Frequency',
     ])
     for j, extra in job_rows:
         staff_names = ', '.join(
@@ -63,6 +65,7 @@ def _write_jobs_csv(response, job_rows, extra_headers=None):
             j.service_value,
             staff_names,
             '; '.join(product_lines.get(str(j.id), [])),
+            ', '.join(product_names.get(str(j.id), [])),
             j.notes or '',
             j.call_status,
             j.calls_made,
