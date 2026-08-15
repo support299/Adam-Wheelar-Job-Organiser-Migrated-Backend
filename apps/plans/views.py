@@ -1,16 +1,74 @@
+import csv
+
+from django.http import HttpResponse
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.jobs.models import Job
+from apps.jobs.models import Job, JobProduct
 from apps.jobs.views import _spawn_next_occurrence
+from apps.staff.models import Staff
 from .models import JobProgress, SavedPlan
 from .serializers import (
     JobProgressSerializer,
     SavedPlanSerializer,
     UpsertJobProgressSerializer,
 )
+
+
+def _write_jobs_csv(response, job_rows, extra_headers=None):
+    """job_rows: list of (job, extra_values) tuples. extra_headers: column names
+    for extra_values, prepended before the standard job columns — used to tag
+    each row with which plan it came from when exporting across many plans."""
+    extra_headers = extra_headers or []
+    jobs = [j for j, _ in job_rows]
+
+    staff_ids = {str(js.staff_id) for j in jobs for js in j.job_staff.all()}
+    staff_map = {str(s.id): s.name for s in Staff.objects.filter(id__in=staff_ids)}
+
+    product_lines: dict = {}
+    for jp in JobProduct.objects.filter(job__in=jobs).select_related('product'):
+        product_lines.setdefault(str(jp.job_id), []).append(
+            f'{jp.product.name} x{jp.quantity} @ ${jp.unit_price}'
+        )
+
+    writer = csv.writer(response)
+    writer.writerow([
+        *extra_headers,
+        'Job Name', 'Contact ID', 'Email', 'Phone', 'Address', 'Latitude', 'Longitude',
+        'Service Date', 'Service Time', 'Service Type', 'Status', 'Payment Status',
+        'Amount', 'Assigned Staff', 'Products', 'Notes', 'Call Status', 'Calls Made',
+        'Recurring', 'Frequency',
+    ])
+    for j, extra in job_rows:
+        staff_names = ', '.join(
+            staff_map.get(str(js.staff_id), '') for js in j.job_staff.all()
+        )
+        writer.writerow([
+            *extra,
+            j.name,
+            j.ghl_contact_id or '',
+            j.email,
+            j.phone or '',
+            j.address,
+            j.lat,
+            j.lng,
+            j.service_date.isoformat(),
+            j.service_time.strftime('%H:%M') if j.service_time else '',
+            j.service_type,
+            j.status,
+            j.payment_status,
+            j.service_value,
+            staff_names,
+            '; '.join(product_lines.get(str(j.id), [])),
+            j.notes or '',
+            j.call_status,
+            j.calls_made,
+            'Yes' if j.is_recurring else 'No',
+            j.frequency or '',
+        ])
 
 
 class SavedPlanViewSet(viewsets.ModelViewSet):
@@ -100,6 +158,41 @@ class SavedPlanViewSet(viewsets.ModelViewSet):
         ctx = {**self.get_serializer_context(), 'job_map': job_map, 'current_staff_id': self._staff_ctx()}
         serializer = self.get_serializer(instance, context=ctx)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['get'], url_path='export-csv')
+    def export_csv(self, request, pk=None):
+        plan = self.get_object()
+        job_map = self._job_map([plan])
+        job_rows = [
+            (job_map[jid], [])
+            for jid in (plan.ordered_job_ids or [])
+            if jid in job_map
+        ]
+
+        response = HttpResponse(content_type='text/csv')
+        filename = f"{plan.name}-{plan.plan_date}.csv".replace(' ', '_')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        _write_jobs_csv(response, job_rows)
+        return response
+
+    @action(detail=False, methods=['get'], url_path='export-csv')
+    def export_all_csv(self, request):
+        """Export jobs across every plan matching the current list filters
+        (date_from/date_to/staff_id) — not just a single plan."""
+        plans = list(self.filter_queryset(self.get_queryset()))
+        job_map = self._job_map(plans)
+
+        job_rows = [
+            (job_map[jid], [plan.name, plan.plan_date.isoformat()])
+            for plan in plans
+            for jid in (plan.ordered_job_ids or [])
+            if jid in job_map
+        ]
+
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="saved_plans.csv"'
+        _write_jobs_csv(response, job_rows, extra_headers=['Plan Name', 'Plan Date'])
+        return response
 
 
 class JobProgressViewSet(viewsets.ReadOnlyModelViewSet):
