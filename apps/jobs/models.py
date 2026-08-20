@@ -52,6 +52,9 @@ class Job(models.Model):
     # Stable external key from the customer-list CSV ("ContactID" column).
     # Used to upsert rows so re-running the import never duplicates jobs.
     import_contact_id = models.TextField(blank=True, null=True, unique=True)
+    # True for backfilled rows created by import_activities_csv from the historic
+    # CRM activity export. Re-running that command replaces the whole flagged set.
+    is_imported = models.BooleanField(default=False)
     service_type = models.TextField(default='installation')
     sale_date = models.DateField(blank=True, null=True)
     payment_status = models.CharField(

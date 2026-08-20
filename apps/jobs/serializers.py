@@ -47,9 +47,9 @@ class JobSerializer(serializers.ModelSerializer):
             'is_recurring', 'frequency', 'ghl_contact_id', 'service_type',
             'sale_date', 'payment_status', 'call_status', 'calls_made', 'completed_at', 'duration',
             'parent_job_id', 'occurrence_index', 'total_occurrences', 'series_count', 'occurrences',
-            'created_at', 'updated_at', 'staff_ids', 'last_call_at',
+            'created_at', 'updated_at', 'staff_ids', 'last_call_at', 'is_imported',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'staff_ids', 'series_count', 'total_occurrences', 'last_call_at']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'staff_ids', 'series_count', 'total_occurrences', 'last_call_at', 'is_imported']
 
 
 class JobStaffIdsSerializer(serializers.Serializer):

@@ -20,12 +20,15 @@ class JobFilter(django_filters.FilterSet):
     )
     # Jobs with no staff assigned (?unassigned=true)
     unassigned = django_filters.BooleanFilter(method='filter_unassigned')
+    # Backfilled rows from the historic CRM activity export
+    # (?is_imported=false hides them from the working job lists)
+    is_imported = django_filters.BooleanFilter(field_name='is_imported')
     # Service-due bucket — mirrors getDueTag() on the frontend.
     due_tag = django_filters.CharFilter(method='filter_due_tag')
 
     class Meta:
         model = Job
-        fields = ['status', 'service_type', 'ghl_contact_id']
+        fields = ['status', 'service_type', 'ghl_contact_id', 'is_imported']
 
     def filter_unassigned(self, queryset, name, value):
         if value:
