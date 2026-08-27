@@ -26,6 +26,9 @@ urlpatterns = [
     # Contacts and notes
     path('api/contacts/', include('apps.contacts.urls')),
 
+    # Activities
+    path('api/', include('apps.activities.urls')),
+
     # GoHighLevel management + public webhook
     path('api/ghl/', include('apps.ghl.urls')),
     path('api/webhooks/', include('apps.ghl.webhook_urls')),

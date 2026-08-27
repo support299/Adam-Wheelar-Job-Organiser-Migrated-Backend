@@ -39,6 +39,7 @@ LOCAL_APPS = [
     'apps.ghl',
     'apps.maps',
     'apps.dashboard',
+    'apps.activities',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -144,6 +145,14 @@ CORS_ALLOW_CREDENTIALS = True
 # ── Celery ───────────────────────────────────────────────────────────────────
 REDIS_URL = config('REDIS_URL', default='redis://localhost:6379/0')
 CELERY_BROKER_URL = REDIS_URL
+
+# ── Cache ────────────────────────────────────────────────────────────────────
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': config('CACHE_REDIS_URL', default='redis://localhost:6379/1'),
+    },
+}
 CELERY_RESULT_BACKEND = 'django-db'
 CELERY_CACHE_BACKEND = 'django-cache'
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
