@@ -64,6 +64,7 @@ def _spawn_next_occurrence(completed_job: Job):
             service_time=root.service_time,
             status='pending',
             notes=None,
+            activity=root.activity,
             is_recurring=True,
             frequency=root.frequency,
             service_type='servicing',

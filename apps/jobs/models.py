@@ -41,6 +41,11 @@ class Job(models.Model):
         max_length=20, choices=JobStatus.choices, default=JobStatus.PENDING
     )
     notes = models.TextField(blank=True, null=True)
+    # Optional single activity classification, chosen from the Activity catalogue.
+    activity = models.ForeignKey(
+        'activities.Activity', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='jobs',
+    )
     is_recurring = models.BooleanField(default=False)
     frequency = models.CharField(
         max_length=20,
