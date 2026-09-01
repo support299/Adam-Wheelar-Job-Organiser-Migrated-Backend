@@ -1,6 +1,13 @@
 from rest_framework import serializers
 
-from .models import Job, JobProduct, JobStaff
+from .models import Job, JobCall, JobProduct, JobStaff
+
+
+class JobCallSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = JobCall
+        fields = ['id', 'job', 'date', 'notes', 'outcome', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 class JobProductSerializer(serializers.ModelSerializer):

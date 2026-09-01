@@ -30,8 +30,9 @@ from apps.staff.models import Staff
 from config.pagination import OptionalPageNumberPagination
 
 from .filters import JobFilter
-from .models import Job, JobProduct, JobStaff
+from .models import Job, JobCall, JobProduct, JobStaff
 from .serializers import (
+    JobCallSerializer,
     JobProductLinesSerializer,
     JobProductWriteSerializer,
     JobSerializer,
@@ -88,6 +89,17 @@ def _spawn_next_occurrence(completed_job: Job):
                 JobStaff(job=next_job, staff_id=js.staff_id)
                 for js in root_staff
             ])
+
+
+class JobCallViewSet(viewsets.ModelViewSet):
+    """CRUD for calls logged against a job. Filter the list with ?job=<id>."""
+
+    queryset = JobCall.objects.all()
+    serializer_class = JobCallSerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['job']
+    ordering_fields = ['date', 'created_at']
+    ordering = ['-date', '-created_at']
 
 
 class JobViewSet(viewsets.ModelViewSet):
@@ -225,6 +237,89 @@ class JobViewSet(viewsets.ModelViewSet):
                     [JobStaff(job=job, staff_id=sid) for sid in staff_ids]
                 )
         return Response({'staff_ids': [str(s) for s in staff_ids]})
+
+    # ── Notes feed ─────────────────────────────────────────────────────────
+
+    @action(detail=False, methods=['get'], url_path='notes')
+    def notes_feed(self, request):
+        """Unified notes feed for a contact: job notes + call-log notes.
+
+        Query params:
+          ghl_contact_id OR email  — required (contact scope)
+          job_id                   — optional, restrict to a single job
+          source                   — optional: 'job' | 'call' (default: both)
+        """
+        email = request.query_params.get('email', '').strip().lower()
+        ghl_contact_id = request.query_params.get('ghl_contact_id', '').strip()
+        job_id = request.query_params.get('job_id', '').strip()
+        source = request.query_params.get('source', '').strip().lower()
+
+        if not email and not ghl_contact_id:
+            return Response(
+                {'detail': 'Provide email or ghl_contact_id.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if source and source not in ('job', 'call'):
+            return Response(
+                {'detail': "source must be 'job' or 'call'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        job_q = Q()
+        if email:
+            job_q |= Q(email__iexact=email)
+        if ghl_contact_id:
+            job_q |= Q(ghl_contact_id=ghl_contact_id)
+        jobs = Job.objects.filter(job_q)
+        if job_id:
+            jobs = jobs.filter(id=job_id)
+        jobs_by_id = {str(j.id): j for j in jobs}
+
+        def job_meta(j):
+            return {
+                'job_id': str(j.id),
+                'job_service_date': j.service_date.isoformat(),
+                'job_status': j.status,
+                'job_service_type': j.service_type,
+                'job_payment_status': j.payment_status,
+                'job_address': j.address,
+            }
+
+        items = []
+
+        if source in ('', 'job'):
+            for j in jobs_by_id.values():
+                body = (j.notes or '').strip()
+                if not body:
+                    continue
+                items.append({
+                    'id': f'job-{j.id}',
+                    'source': 'job',
+                    'body': body,
+                    'date': j.service_date.isoformat(),
+                    'outcome': None,
+                    'created_at': j.created_at.isoformat(),
+                    'updated_at': j.updated_at.isoformat(),
+                    **job_meta(j),
+                })
+
+        if source in ('', 'call'):
+            calls = JobCall.objects.filter(job_id__in=jobs_by_id.keys())
+            for c in calls:
+                j = jobs_by_id[str(c.job_id)]
+                items.append({
+                    'id': f'call-{c.id}',
+                    'source': 'call',
+                    'body': (c.notes or '').strip(),
+                    'date': c.date.isoformat(),
+                    'outcome': c.outcome,
+                    'created_at': c.created_at.isoformat(),
+                    'updated_at': c.updated_at.isoformat(),
+                    **job_meta(j),
+                })
+
+        items.sort(key=lambda it: (it['date'], it['created_at']), reverse=True)
+        return Response(items)
 
     # ── Product (line item) endpoints ──────────────────────────────────────
 

@@ -26,6 +26,13 @@ class PaymentStatus(models.TextChoices):
     PAID = 'paid', 'Paid'
 
 
+class CallOutcome(models.TextChoices):
+    CONNECTED = 'connected', 'Connected'
+    NOT_CONNECTED = 'not_connected', 'Not connected'
+    CALL_BACK = 'call_back', 'Call back'
+    NO_ANSWER = 'no_answer', 'No answer'
+
+
 class Job(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.TextField(blank=True)
@@ -105,6 +112,29 @@ class JobStaff(models.Model):
 
     def __str__(self):
         return f'{self.job_id} ↔ {self.staff_id}'
+
+
+class JobCall(models.Model):
+    """A single call logged against a job — either planned (no outcome yet) or
+    already made. The UI shows all of a job's calls as one timeline."""
+
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='calls')
+    date = models.DateField()
+    notes = models.TextField(blank=True)
+    outcome = models.CharField(
+        max_length=20, choices=CallOutcome.choices, blank=True, null=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-date', '-created_at']
+        indexes = [
+            models.Index(fields=['job']),
+        ]
+
+    def __str__(self):
+        return f'{self.job_id} — call {self.date}'
 
 
 class JobProduct(models.Model):
