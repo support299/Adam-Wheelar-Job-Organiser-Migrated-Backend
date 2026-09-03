@@ -12,6 +12,12 @@ class RecurrenceFrequency(models.TextChoices):
     ANNUALLY = 'annually', 'Annually'
 
 
+class ServiceType(models.TextChoices):
+    INSTALLATION = 'installation', 'Installation'
+    SERVICING = 'servicing', 'Servicing'
+    AD_HOC = 'ad_hoc', 'Ad-hoc'
+
+
 class JobStatus(models.TextChoices):
     PENDING = 'pending', 'Pending'
     SCHEDULED = 'scheduled', 'Scheduled'
@@ -67,7 +73,9 @@ class Job(models.Model):
     # True for backfilled rows created by import_activities_csv from the historic
     # CRM activity export. Re-running that command replaces the whole flagged set.
     is_imported = models.BooleanField(default=False)
-    service_type = models.TextField(default='installation')
+    service_type = models.TextField(
+        choices=ServiceType.choices, default=ServiceType.SERVICING
+    )
     sale_date = models.DateField(blank=True, null=True)
     payment_status = models.CharField(
         max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.PAID
