@@ -197,6 +197,8 @@ def _build_staff_report(staff_id: str, date_from: str | None, date_to: str | Non
         j = lookup_jobs.get(jid)
         if not j:
             continue
+        if j.service_type == 'workshop':
+            continue
         val = float(j.service_value or 0)
         if j.service_type == 'installation':
             install_revenue += val
@@ -204,6 +206,12 @@ def _build_staff_report(staff_id: str, date_from: str | None, date_to: str | Non
         else:
             service_revenue += val
             service_count += 1
+
+    # Workshop / shop-time entries — a timesheet log, not revenue. Counted for
+    # every assigned entry in range regardless of status.
+    workshop_jobs = [j for j in staff_jobs if j.service_type == 'workshop']
+    workshop_count = len(workshop_jobs)
+    workshop_hours = round(sum(int(j.duration or 0) for j in workshop_jobs) / 60, 2)
 
     job_travel: dict = {}
     plan_rows = []
@@ -269,6 +277,8 @@ def _build_staff_report(staff_id: str, date_from: str | None, date_to: str | Non
             'service_count': service_count,
             'install_revenue': install_revenue,
             'install_count': install_count,
+            'workshop_count': workshop_count,
+            'workshop_hours': workshop_hours,
         },
     }
 

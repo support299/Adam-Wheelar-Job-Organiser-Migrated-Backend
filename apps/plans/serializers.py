@@ -56,7 +56,11 @@ class SavedPlanSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "All jobs in a plan must be assigned to the same staff member."
             )
-        if has_unassigned and all_staff_ids:
+        if not all_staff_ids:
+            raise serializers.ValidationError(
+                "Assign a staff member to these jobs before saving a plan."
+            )
+        if has_unassigned:
             raise serializers.ValidationError(
                 "Cannot mix assigned and unassigned jobs in the same plan."
             )

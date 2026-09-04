@@ -16,6 +16,7 @@ class ServiceType(models.TextChoices):
     INSTALLATION = 'installation', 'Installation'
     SERVICING = 'servicing', 'Servicing'
     AD_HOC = 'ad_hoc', 'Ad-hoc'
+    WORKSHOP = 'workshop', 'Workshop'
 
 
 class JobStatus(models.TextChoices):
