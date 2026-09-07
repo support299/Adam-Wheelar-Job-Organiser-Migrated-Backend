@@ -103,14 +103,33 @@ class JobCallViewSet(viewsets.ModelViewSet):
 
 
 class JobViewSet(viewsets.ModelViewSet):
-    queryset = Job.objects.prefetch_related('job_staff', 'child_jobs').annotate(
-        last_call_at=Subquery(
-            ContactNote.objects.filter(job_id=OuterRef('id'))
-            .order_by('-created_at')
-            .values('created_at')[:1]
-        )
-    )
+    queryset = Job.objects.all()
     serializer_class = JobSerializer
+
+    def get_queryset(self):
+        """Only build the expensive extras (recurring-series count, last-call
+        subquery) when the response will actually include those fields. Callers
+        that pass a trimmed ``?fields=`` set (Daily Planner, Map View) skip them.
+        """
+        qs = Job.objects.prefetch_related('job_staff')
+
+        raw_fields = self.request.query_params.get('fields') if self.request else None
+        wanted = (
+            {name.strip() for name in raw_fields.split(',') if name.strip()}
+            if raw_fields else None
+        )
+
+        if wanted is None or 'series_count' in wanted:
+            qs = qs.prefetch_related('child_jobs')
+        if wanted is None or 'last_call_at' in wanted:
+            qs = qs.annotate(
+                last_call_at=Subquery(
+                    ContactNote.objects.filter(job_id=OuterRef('id'))
+                    .order_by('-created_at')
+                    .values('created_at')[:1]
+                )
+            )
+        return qs
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = JobFilter
     search_fields = ['name', 'email', 'address', 'phone']

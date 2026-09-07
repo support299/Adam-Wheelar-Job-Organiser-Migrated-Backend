@@ -3,6 +3,31 @@ from rest_framework import serializers
 from .models import Job, JobCall, JobProduct, JobStaff
 
 
+class DynamicFieldsMixin:
+    """Honour ``?fields=a,b,c`` on read requests to return a sparse representation.
+
+    Keeps list/detail payloads small for callers (Daily Planner, Map View) that
+    only need a handful of columns. Ignored for writes and when the param is
+    absent, so existing consumers keep getting the full record. ``id`` is always
+    retained.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get('request')
+        if request is None or request.method not in ('GET', 'HEAD'):
+            return
+        raw = request.query_params.get('fields')
+        if not raw:
+            return
+        wanted = {name.strip() for name in raw.split(',') if name.strip()}
+        if not wanted:
+            return
+        wanted.add('id')
+        for name in set(self.fields) - wanted:
+            self.fields.pop(name)
+
+
 class JobCallSerializer(serializers.ModelSerializer):
     class Meta:
         model = JobCall
@@ -27,7 +52,7 @@ class JobProductLinesSerializer(serializers.Serializer):
     lines = JobProductWriteSerializer(many=True)
 
 
-class JobSerializer(serializers.ModelSerializer):
+class JobSerializer(DynamicFieldsMixin, serializers.ModelSerializer):
     staff_ids = serializers.SerializerMethodField()
     series_count = serializers.SerializerMethodField()
     last_call_at = serializers.SerializerMethodField()
