@@ -1,12 +1,13 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .views import JobCallViewSet, JobViewSet
+from .views import JobAttachmentViewSet, JobCallViewSet, JobViewSet
 
 router = DefaultRouter()
 # `calls` must be registered before the catch-all `r''` job route, otherwise
 # `/jobs/calls/` is captured by the job-detail pattern `^(?P<pk>[^/.]+)/$`.
 router.register(r'calls', JobCallViewSet, basename='job-call')
+router.register(r'attachments', JobAttachmentViewSet, basename='job-attachment')
 router.register(r'', JobViewSet, basename='job')
 
 urlpatterns = [

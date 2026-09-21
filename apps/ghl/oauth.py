@@ -141,15 +141,20 @@ def _exchange_and_store_location(company_token: dict) -> None:
     _persist_token(loc_token)
 
 
-def get_valid_location_token() -> tuple[str, str]:
-    """Return (access_token, location_id), refreshing if the token expires within 60 s."""
-    row = (
-        GhlToken.objects.filter(location_id__isnull=False)
-        .order_by('-updated_at')
-        .first()
-    )
+def get_valid_location_token(location_id: str | None = None) -> tuple[str, str]:
+    """Return (access_token, location_id), refreshing if the token expires within 60 s.
+
+    With `location_id`, use that location's token; otherwise use the most recently updated one.
+    """
+    rows = GhlToken.objects.filter(location_id__isnull=False)
+    if location_id:
+        rows = rows.filter(location_id=location_id)
+    row = rows.order_by('-updated_at').first()
     if not row:
-        raise ValueError('No GHL location connection found.')
+        raise ValueError(
+            f'No GHL connection found for location {location_id}.'
+            if location_id else 'No GHL location connection found.'
+        )
 
     if row.expires_at - dj_timezone.now() > timedelta(seconds=60):
         return row.access_token, row.location_id
@@ -308,6 +313,36 @@ def update_contact_custom_field(contact_id: str, name_value: str) -> dict:
             'Authorization': f'Bearer {access_token}',
         },
         timeout=10,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def upload_media_file(file, name: str = '', location_id: str | None = None) -> dict:
+    """Upload a file to the GHL media library folder (GHL_MEDIA_PARENT_ID) and return GHL's JSON response.
+
+    `file` is a Django UploadedFile. `location_id` selects which location's token is used.
+    """
+    if not settings.GHL_MEDIA_PARENT_ID:
+        raise ValueError('GHL_MEDIA_PARENT_ID is not configured.')
+
+    access_token, _location_id = get_valid_location_token(location_id)
+    print(f'Uploading media file: {file.name} to location: {_location_id}')
+    print(f'Access Token: {access_token}')
+
+    data = {'name': name or file.name, 'parentId': settings.GHL_MEDIA_PARENT_ID}
+
+    # Content-Type is deliberately not set: requests adds the multipart boundary itself.
+    resp = requests.post(
+        settings.GHL_MEDIA_UPLOAD_URL,
+        data=data,
+        files={'file': (file.name, file, file.content_type or 'application/octet-stream')},
+        headers={
+            'Accept': 'application/json',
+            'Version': 'v3',
+            'Authorization': f'Bearer {access_token}',
+        },
+        timeout=60,
     )
     resp.raise_for_status()
     return resp.json()

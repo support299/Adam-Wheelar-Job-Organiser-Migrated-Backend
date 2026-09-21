@@ -174,6 +174,8 @@ GHL_AUTHORIZE_URL = 'https://marketplace.gohighlevel.com/v2/oauth/chooselocation
 GHL_TOKEN_URL = 'https://services.leadconnectorhq.com/oauth/token'
 GHL_LOCATION_TOKEN_URL = 'https://services.leadconnectorhq.com/oauth/locationToken'
 GHL_CONTACTS_URL = 'https://services.leadconnectorhq.com/contacts'
+GHL_MEDIA_UPLOAD_URL = 'https://services.leadconnectorhq.com/medias/upload-file'
+GHL_MEDIA_PARENT_ID = config('GHL_MEDIA_PARENT_ID', default='')
 GHL_REDIRECT_URI = config('GHL_REDIRECT_URI', default='http://localhost:8000/api/oauth/callback/')
 GHL_FRONTEND_URL = config('GHL_FRONTEND_URL', default='http://localhost:5173')
 GHL_SCOPES = config(

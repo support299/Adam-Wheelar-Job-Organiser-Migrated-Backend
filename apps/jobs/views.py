@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from django.db import transaction
 from django.db.models import OuterRef, Q, Subquery
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters, status, viewsets
+from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -29,9 +29,10 @@ from apps.products.models import Product
 from apps.staff.models import Staff
 from config.pagination import OptionalPageNumberPagination
 
-from .filters import JobFilter
-from .models import Job, JobCall, JobProduct, JobStaff
+from .filters import JobAttachmentFilter, JobFilter
+from .models import Job, JobAttachment, JobCall, JobProduct, JobStaff
 from .serializers import (
+    JobAttachmentSerializer,
     JobCallSerializer,
     JobProductLinesSerializer,
     JobProductWriteSerializer,
@@ -89,6 +90,17 @@ def _spawn_next_occurrence(completed_job: Job):
                 JobStaff(job=next_job, staff_id=js.staff_id)
                 for js in root_staff
             ])
+
+
+class JobAttachmentViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    """List job attachments. Filter with ?job=<job id> and/or ?ghl_contact_id=<contact id>."""
+
+    queryset = JobAttachment.objects.all()
+    serializer_class = JobAttachmentSerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_class = JobAttachmentFilter
+    ordering_fields = ['created_at']
+    ordering = ['-created_at']
 
 
 class JobCallViewSet(viewsets.ModelViewSet):

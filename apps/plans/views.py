@@ -108,7 +108,7 @@ class SavedPlanViewSet(viewsets.ModelViewSet):
 
     def _job_map(self, plans):
         all_ids = {jid for p in plans for jid in (p.ordered_job_ids or [])}
-        jobs = Job.objects.prefetch_related('job_staff').filter(id__in=all_ids)
+        jobs = Job.objects.prefetch_related('job_staff', 'child_jobs').filter(id__in=all_ids)
         return {str(j.id): j for j in jobs}
 
     def _staff_ctx(self):

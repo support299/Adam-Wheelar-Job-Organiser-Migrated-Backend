@@ -164,3 +164,22 @@ class JobProduct(models.Model):
 
     def __str__(self):
         return f'{self.job_id} — {self.product_id} × {self.quantity}'
+
+
+class JobAttachment(models.Model):
+    """A link to a file or document related to a job. Only the URL is stored;
+    the file itself lives elsewhere."""
+
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='attachments')
+    url = models.URLField(max_length=2000)
+    name = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['job']),
+        ]
+
+    def __str__(self):
+        return f'{self.job_id} — {self.name or self.url}'

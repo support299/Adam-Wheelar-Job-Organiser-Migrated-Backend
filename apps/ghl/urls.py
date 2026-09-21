@@ -7,6 +7,7 @@ from .views import (
     GhlStatusView,
     GhlSyncContactsView,
     GhlUpdateContactView,
+    GhlUploadFileView,
 )
 
 urlpatterns = [
@@ -15,5 +16,6 @@ urlpatterns = [
     path('exchange/', GhlExchangeView.as_view(), name='ghl-exchange'),
     path('refresh/', GhlRefreshView.as_view(), name='ghl-refresh'),
     path('sync-contacts/', GhlSyncContactsView.as_view(), name='ghl-sync-contacts'),
+    path('upload-file/', GhlUploadFileView.as_view(), name='ghl-upload-file'),
     path('update/user_id', GhlUpdateContactView.as_view(), name='ghl-update-contact'),
 ]

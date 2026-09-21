@@ -2,7 +2,17 @@ from datetime import date, timedelta
 
 import django_filters
 
-from .models import Job
+from .models import Job, JobAttachment
+
+
+class JobAttachmentFilter(django_filters.FilterSet):
+    job = django_filters.UUIDFilter(field_name='job__id')
+    # The contact the job belongs to (Job.ghl_contact_id)
+    ghl_contact_id = django_filters.CharFilter(field_name='job__ghl_contact_id')
+
+    class Meta:
+        model = JobAttachment
+        fields = ['job', 'ghl_contact_id']
 
 
 class JobFilter(django_filters.FilterSet):

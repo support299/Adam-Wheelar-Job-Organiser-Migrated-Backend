@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Job, JobCall, JobProduct, JobStaff
+from .models import Job, JobAttachment, JobCall, JobProduct, JobStaff
 
 
 class DynamicFieldsMixin:
@@ -26,6 +26,12 @@ class DynamicFieldsMixin:
         wanted.add('id')
         for name in set(self.fields) - wanted:
             self.fields.pop(name)
+
+
+class JobAttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = JobAttachment
+        fields = ['id', 'job', 'url', 'name', 'created_at']
 
 
 class JobCallSerializer(serializers.ModelSerializer):

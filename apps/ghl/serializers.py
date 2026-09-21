@@ -17,6 +17,12 @@ class UpdateContactCustomFieldSerializer(serializers.Serializer):
         return value
 
 
+class UploadMediaFileSerializer(serializers.Serializer):
+    job_id = serializers.UUIDField()
+    file = serializers.FileField()
+    name = serializers.CharField(required=False, allow_blank=True)
+
+
 class GhlTokenStatusSerializer(serializers.Serializer):
     expires_at = serializers.DateTimeField(allow_null=True)
     location_id = serializers.CharField(allow_null=True)
