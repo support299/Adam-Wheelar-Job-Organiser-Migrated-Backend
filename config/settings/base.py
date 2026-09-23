@@ -122,7 +122,7 @@ REST_FRAMEWORK = {
 # ── Simple JWT ───────────────────────────────────────────────────────────────
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(
-        minutes=config('JWT_ACCESS_TOKEN_LIFETIME_MINUTES', default=60, cast=int)
+        days=config('JWT_ACCESS_TOKEN_LIFETIME_DAYS', default=3, cast=int)
     ),
     'REFRESH_TOKEN_LIFETIME': timedelta(
         days=config('JWT_REFRESH_TOKEN_LIFETIME_DAYS', default=7, cast=int)
